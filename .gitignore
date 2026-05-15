@@ -1,0 +1,9 @@
+# Godot 자동 생성 캐시
+.godot/
+
+# 임포트 파일
+*.import
+
+# 참고용 이미지 (레포 불필요)
+assets/doodle_rpg_sheet.png
+assets/doodle_rpg_extras.png
