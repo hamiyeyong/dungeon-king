@@ -12,6 +12,11 @@ enum Cell {
 	DOOR, DOOR_OPEN,
 	WHITE_CAULDRON, BLACK_CAULDRON, MAGIC_WELL,
 	MERCHANT,
+	TAINTED_SPRING, CLEAR_SPRING,
+	SKULL_PILE, ALTAR, ALTAR_BIG,
+	KNOWLEDGE_TABLET,
+	WIZARD_STATUE, WARRIOR_STATUE, ANGEL_STATUE,
+	BOOKSHELF,
 }
 
 # 타일셋 atlas 좌표 (col, row) — tiles-64.png 기준
@@ -187,6 +192,32 @@ func _place_objects(floor_num: int = 1) -> void:
 	# 문: 방과 방 사이 복도 입구 (각 방 가장자리)에 배치
 	_place_doors()
 
+	# 특수 오브젝트: 방 내부 빈 바닥 타일에 배치
+	var room_tiles: Array[Vector2i] = []
+	for room in rooms:
+		for ry in range(room.position.y + 1, room.end.y - 1):
+			for rx in range(room.position.x + 1, room.end.x - 1):
+				if grid[ry][rx] == Cell.FLOOR:
+					room_tiles.append(Vector2i(rx, ry))
+	room_tiles.shuffle()
+
+	var special_types: Array[int] = []
+	if randi() % 2 == 0: special_types.append(Cell.TAINTED_SPRING)
+	if randi() % 4 == 0: special_types.append(Cell.CLEAR_SPRING)
+	if randi() % 2 == 0: special_types.append(Cell.SKULL_PILE)
+	if randi() % 3 == 0: special_types.append(Cell.ALTAR)
+	if randi() % 5 == 0: special_types.append(Cell.ALTAR_BIG)
+	if randi() % 3 == 0: special_types.append(Cell.KNOWLEDGE_TABLET)
+	if randi() % 4 == 0: special_types.append(Cell.WARRIOR_STATUE)
+	if randi() % 5 == 0: special_types.append(Cell.WIZARD_STATUE)
+	if randi() % 6 == 0: special_types.append(Cell.ANGEL_STATUE)
+	if randi() % 3 == 0: special_types.append(Cell.BOOKSHELF)
+	for obj_type in special_types:
+		if room_tiles.is_empty():
+			break
+		var pos: Vector2i = room_tiles.pop_back()
+		grid[pos.y][pos.x] = obj_type
+
 	# 수풀: 바닥 타일의 약 2.5% 배치
 	for y in range(1, HEIGHT - 1):
 		for x in range(1, WIDTH - 1):
@@ -264,6 +295,25 @@ func _draw() -> void:
 						_blit_tinted(dest, TILE_WELL, Color(0.5, 0.8, 1.0))
 					elif cell == Cell.MERCHANT:
 						_draw_merchant_marker(dest)
+					elif cell == Cell.TAINTED_SPRING:
+						draw_rect(dest, Color(0.3, 0.55, 0.25, 0.85))
+					elif cell == Cell.CLEAR_SPRING:
+						draw_rect(dest, Color(0.2, 0.6, 0.9, 0.85))
+					elif cell == Cell.SKULL_PILE:
+						draw_rect(dest, Color(0.65, 0.65, 0.55, 0.85))
+					elif cell == Cell.ALTAR or cell == Cell.ALTAR_BIG:
+						var ac := Color(0.55, 0.4, 0.15, 0.85) if cell == Cell.ALTAR else Color(0.75, 0.6, 0.1, 0.9)
+						draw_rect(dest, ac)
+					elif cell == Cell.KNOWLEDGE_TABLET:
+						draw_rect(dest, Color(0.5, 0.45, 0.35, 0.85))
+					elif cell == Cell.WIZARD_STATUE:
+						draw_rect(dest, Color(0.35, 0.2, 0.55, 0.85))
+					elif cell == Cell.WARRIOR_STATUE:
+						draw_rect(dest, Color(0.35, 0.4, 0.25, 0.85))
+					elif cell == Cell.ANGEL_STATUE:
+						draw_rect(dest, Color(0.75, 0.75, 0.8, 0.85))
+					elif cell == Cell.BOOKSHELF:
+						draw_rect(dest, Color(0.45, 0.3, 0.15, 0.85))
 					else:
 						_blit(dest, _cell_atlas(cell))
 					# 특수 오브젝트 텍스트 레이블
@@ -282,6 +332,16 @@ func _draw() -> void:
 						Cell.MAGIC_WELL:     _draw_obj_label(dest, "우물", Color("#88ddff"))
 						Cell.MERCHANT:       _draw_obj_label(dest, "상점", Color("#f0d060"))
 						Cell.STAIRS:         _draw_obj_label(dest, "계단", Color("#ffffaa"))
+						Cell.TAINTED_SPRING: _draw_obj_label(dest, "샘(탁)", Color("#99cc66"))
+						Cell.CLEAR_SPRING:   _draw_obj_label(dest, "샘(맑)", Color("#66ddff"))
+						Cell.SKULL_PILE:     _draw_obj_label(dest, "해골더미", Color("#ddddcc"))
+						Cell.ALTAR:          _draw_obj_label(dest, "제단", Color("#ddaa44"))
+						Cell.ALTAR_BIG:      _draw_obj_label(dest, "대제단", Color("#ffcc22"))
+						Cell.KNOWLEDGE_TABLET: _draw_obj_label(dest, "석판", Color("#ccbbaa"))
+						Cell.WIZARD_STATUE:  _draw_obj_label(dest, "마법사상", Color("#bb88ff"))
+						Cell.WARRIOR_STATUE: _draw_obj_label(dest, "전사상", Color("#aabb88"))
+						Cell.ANGEL_STATUE:   _draw_obj_label(dest, "천사상", Color("#ffffff"))
+						Cell.BOOKSHELF:      _draw_obj_label(dest, "책장", Color("#ddaa66"))
 			if has_fov:
 				if not vis:
 					draw_rect(dest, Color(0, 0, 0, 0.6))
@@ -451,6 +511,9 @@ func is_walkable(x: int, y: int) -> bool:
 		Cell.WALL, Cell.CAMPFIRE, Cell.CAMPFIRE_OUT,
 		Cell.GRASS, Cell.JAR, Cell.DOOR,
 		Cell.WHITE_CAULDRON, Cell.BLACK_CAULDRON, Cell.MAGIC_WELL, Cell.MERCHANT,
+		Cell.SKULL_PILE, Cell.KNOWLEDGE_TABLET,
+		Cell.WIZARD_STATUE, Cell.WARRIOR_STATUE, Cell.ANGEL_STATUE,
+		Cell.BOOKSHELF,
 	]
 
 func is_door(x: int, y: int) -> bool:
