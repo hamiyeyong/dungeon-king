@@ -82,11 +82,11 @@ var _fov_player_pos: Vector2i = Vector2i.ZERO
 var _fov_radius: int = 0
 var _fov_light_sources: Array[Vector2i] = []
 
-func generate() -> void:
+func generate(floor_num: int = 1) -> void:
 	_init_grid()
 	_place_rooms()
 	_connect_rooms()
-	_place_objects()
+	_place_objects(floor_num)
 	queue_redraw()
 
 func update_floor_items(visuals: Array[Dictionary]) -> void:
@@ -150,7 +150,10 @@ func _connect_rooms() -> void:
 			grid[y][b.x] = Cell.FLOOR
 			y += sign(b.y - y)
 
-func _place_objects() -> void:
+func _is_merchant_floor(floor_num: int) -> bool:
+	return floor_num % 5 == 3  # 3, 8, 13, 18, 23층
+
+func _place_objects(floor_num: int = 1) -> void:
 	if rooms.size() < 2:
 		return
 	var last: Vector2i = rooms.back().get_center()
@@ -174,6 +177,12 @@ func _place_objects() -> void:
 				0: grid[c.y][c.x] = Cell.CHEST
 				1: grid[c.y][c.x] = Cell.CAMPFIRE
 				2: grid[c.y][c.x] = Cell.TRAP
+
+	# 상인: 상인층이면 중간 방 중 하나에 배치
+	if _is_merchant_floor(floor_num) and rooms.size() > 2:
+		var mid_idx: int = rooms.size() / 2
+		var mc: Vector2i = rooms[mid_idx].get_center()
+		grid[mc.y][mc.x] = Cell.MERCHANT
 
 	# 문: 방과 방 사이 복도 입구 (각 방 가장자리)에 배치
 	_place_doors()

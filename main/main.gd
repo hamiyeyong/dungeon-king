@@ -28,6 +28,9 @@ var _run_explore_xp: int = 0
 
 var _campfire_tile_pos: Vector2i = Vector2i.ZERO
 
+# 상인 상점
+var _shop_items: Array[Dictionary] = []   # {item: Item, price: int, sold: bool}
+
 func _ready() -> void:
 	_init_run()
 
@@ -44,7 +47,7 @@ func _init_run() -> void:
 	_identified.assign([false, false, false, false, false, false, false, false, false])
 	floor_items.clear()
 
-	map.generate()
+	map.generate(player.floor_num)
 	var start: Vector2i = map.get_start_pos()
 	player.init(start, map)
 	player.enemy_manager_ref = enemy_manager
@@ -90,6 +93,12 @@ func _init_run() -> void:
 		hud.campfire_action.connect(_on_campfire_action)
 	if not hud.campfire_cook_selected.is_connected(_on_campfire_cook_selected):
 		hud.campfire_cook_selected.connect(_on_campfire_cook_selected)
+	if not player.merchant_approached.is_connected(_on_merchant_approached):
+		player.merchant_approached.connect(_on_merchant_approached)
+	if not hud.merchant_buy.is_connected(_on_merchant_buy):
+		hud.merchant_buy.connect(_on_merchant_buy)
+	if not hud.merchant_sell.is_connected(_on_merchant_sell):
+		hud.merchant_sell.connect(_on_merchant_sell)
 
 	# 탐험경험치 마일스톤 보너스 적용
 	_run_explore_xp = 0
@@ -363,7 +372,10 @@ func _do_floor_transition(direction: int) -> void:
 
 	player.floor_num = new_floor
 	floor_items.clear()
-	map.generate()
+	_shop_items.clear()
+	map.generate(player.floor_num)
+	if _is_merchant_floor(player.floor_num):
+		_generate_shop()
 	var start: Vector2i = map.get_start_pos()
 	player.tile_pos = start
 	player.position = map.tile_to_world(start)
@@ -841,6 +853,123 @@ func _on_craft_recipe(recipe_idx: int) -> void:
 func _on_campfire_approached(tile_pos: Vector2i) -> void:
 	_campfire_tile_pos = tile_pos
 	hud.show_campfire_popup()
+
+# ── 상인 상점 ───────────────────────────────────────────────────────────────
+
+func _is_merchant_floor(n: int) -> bool:
+	return n % 5 == 3
+
+func _item_buy_price(item: Item) -> int:
+	var identified: bool = item.color_idx < _identified.size() and _identified[item.color_idx]
+	if item.is_equipment():
+		match item.item_type:
+			Item.Type.WEAPON_IRON:    return 250
+			Item.Type.WEAPON_STONE:   return 120
+			Item.Type.WEAPON_WOOD:    return 60
+			Item.Type.SHIELD_WOOD:    return 80
+			Item.Type.SHIELD_IRON:    return 200
+			Item.Type.ARMOR_CLOTH:    return 80
+			Item.Type.ARMOR_LEATHER:  return 180
+	if item.is_scroll():
+		return 120 if identified else 50
+	match item.item_type:
+		Item.Type.POTION_HEAL:    return 80 if identified else 30
+		Item.Type.POTION_HUNGER:  return 60 if identified else 30
+		Item.Type.POTION_POISON:  return 50 if identified else 30
+		Item.Type.POTION_FIRE:    return 50 if identified else 30
+		Item.Type.POTION_CLEANSE: return 50 if identified else 30
+		Item.Type.POTION_SLEEP:   return 50 if identified else 30
+		Item.Type.FOOD, Item.Type.COOKED_FOOD: return 40
+		Item.Type.MATERIAL_BRANCH, Item.Type.MATERIAL_STONE, Item.Type.MATERIAL_CLOTH: return 15
+		Item.Type.MATERIAL_HERB:  return 20
+		Item.Type.MATERIAL_ORE:   return 25
+	return 20
+
+func _item_sell_price(item: Item) -> int:
+	return max(1, _item_buy_price(item) / 2)
+
+func _generate_shop() -> void:
+	_shop_items.clear()
+	var count: int = 6 + randi() % 3   # 6~8개
+	for _i in count:
+		var item := _create_shop_item()
+		_shop_items.append({"item": item, "price": _item_buy_price(item), "sold": false})
+
+func _create_shop_item() -> Item:
+	var item := Item.new()
+	var roll: int = randi() % 10
+	if roll < 3:
+		var cidx: int = randi() % 6
+		item.item_type = _potion_map[cidx]
+		item.color_idx = cidx
+	elif roll < 5:
+		var equip_types: Array = [
+			Item.Type.WEAPON_WOOD, Item.Type.WEAPON_STONE, Item.Type.WEAPON_IRON,
+			Item.Type.SHIELD_WOOD, Item.Type.SHIELD_IRON,
+			Item.Type.ARMOR_CLOTH, Item.Type.ARMOR_LEATHER,
+		]
+		var etype: int = equip_types[randi() % equip_types.size()]
+		item.item_type = etype
+		if Item.EQUIPMENT_DATA.has(etype):
+			item.durability = Item.EQUIPMENT_DATA[etype][3]
+			item.max_durability = item.durability
+	elif roll < 7:
+		var sidx: int = randi() % 3
+		item.item_type = Item.SCROLL_TYPES[sidx]
+		item.color_idx = 6 + sidx
+	elif roll < 9:
+		item.item_type = Item.Type.FOOD
+	else:
+		var mats: Array = [Item.Type.MATERIAL_BRANCH, Item.Type.MATERIAL_HERB,
+			Item.Type.MATERIAL_STONE, Item.Type.MATERIAL_CLOTH]
+		item.item_type = mats[randi() % mats.size()]
+	return item
+
+func _sell_prices_for_inventory() -> Array[int]:
+	var prices: Array[int] = []
+	for item in player.inventory:
+		prices.append(_item_sell_price(item))
+	return prices
+
+func _on_merchant_approached(_tile_pos: Vector2i) -> void:
+	if _shop_items.is_empty():
+		_generate_shop()
+	hud.show_merchant_popup(_shop_items, _sell_prices_for_inventory())
+
+func _on_merchant_buy(shop_idx: int) -> void:
+	if shop_idx < 0 or shop_idx >= _shop_items.size():
+		return
+	var d: Dictionary = _shop_items[shop_idx]
+	if d.sold:
+		return
+	var price: int = d.price
+	if player.gold < price:
+		hud.add_log("골드가 부족합니다! (보유: %dG, 필요: %dG)" % [player.gold, price])
+		return
+	if player.inventory.size() >= player.MAX_INVENTORY:
+		hud.add_log("인벤토리가 가득 찼습니다.")
+		return
+	player.gold -= price
+	var bought_item: Item = d.item
+	player.inventory.append(bought_item)
+	d.sold = true
+	_shop_items[shop_idx] = d
+	var ident: bool = bought_item.color_idx < _identified.size() and _identified[bought_item.color_idx]
+	hud.add_log("%s 구매! -%dG (잔액: %dG)" % [bought_item.get_display_name(ident), price, player.gold])
+	hud.update_merchant_data(_shop_items, _sell_prices_for_inventory())
+	_refresh_hud()
+
+func _on_merchant_sell(inv_idx: int) -> void:
+	if inv_idx < 0 or inv_idx >= player.inventory.size():
+		return
+	var item: Item = player.inventory[inv_idx]
+	var sp: int = _item_sell_price(item)
+	var ident: bool = item.color_idx < _identified.size() and _identified[item.color_idx]
+	player.inventory.remove_at(inv_idx)
+	player.gold += sp
+	hud.add_log("%s 판매! +%dG (잔액: %dG)" % [item.get_display_name(ident), sp, player.gold])
+	hud.update_merchant_data(_shop_items, _sell_prices_for_inventory())
+	_refresh_hud()
 
 func _on_campfire_action(action: String) -> void:
 	match action:
