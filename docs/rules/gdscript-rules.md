@@ -85,3 +85,36 @@ draw_string(font, Vector2(0, y), text, HORIZONTAL_ALIGNMENT_CENTER, W, size, col
 ```
 
 패딩을 주려면 `pos.x = rect.position.x + pad`, `width = rect.size.x - pad * 2` 조합을 사용한다.
+
+## match 패턴 멀티라인 금지
+
+`match` 문의 콤마 구분 패턴은 **반드시 한 줄**에 작성한다.  
+GDScript 파서는 패턴 목록의 줄바꿈을 구문 종료로 인식하여 다음 줄을 별개 구문으로 파싱 → 파서 오류 발생.  
+파서 오류가 생기면 해당 파일의 글로벌 클래스 전체가 무효화되어 이를 참조하는 **모든 파일에 연쇄 오류**가 발생한다.
+
+```gdscript
+# ❌ 오류 — 줄바꿈 때문에 파서가 각 줄을 독립 구문으로 인식
+match item_type:
+    Type.MATERIAL_HERB_ICE, Type.MATERIAL_HERB_BLOOD_MOSS,
+    Type.MATERIAL_HERB_GINSENG, Type.MATERIAL_HERB_NIGHTSHADE:
+        return Vector2i(6, 8)
+
+# ✅ 한 줄로 나열
+match item_type:
+    Type.MATERIAL_HERB_ICE, Type.MATERIAL_HERB_BLOOD_MOSS, Type.MATERIAL_HERB_GINSENG, Type.MATERIAL_HERB_NIGHTSHADE:
+        return Vector2i(6, 8)
+```
+
+항목이 너무 많으면 배열/Set으로 미리 정의해두고 `if item_type in HERB_TYPES:` 패턴을 사용한다.
+
+```gdscript
+const HERB_TYPES := [
+    Type.MATERIAL_HERB_ICE,
+    Type.MATERIAL_HERB_BLOOD_MOSS,
+    Type.MATERIAL_HERB_GINSENG,
+]
+
+# match 대신 if 분기
+if item_type in HERB_TYPES:
+    return Vector2i(6, 8)
+```
