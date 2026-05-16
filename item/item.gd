@@ -3,12 +3,13 @@ extends RefCounted
 
 enum Type {
 	POTION_HEAL, POTION_HUNGER, POTION_POISON, POTION_FIRE, POTION_CLEANSE, POTION_SLEEP,
-	FOOD, COOKED_FOOD, SCROLL_ENHANCE,
+	FOOD, COOKED_FOOD, FOOD_ROTTEN,
+	SCROLL_ENHANCE, SCROLL_BASH, SCROLL_TELEPORT, SCROLL_IDENTIFY,
 	WEAPON_WOOD, WEAPON_STONE, WEAPON_IRON,
 	SHIELD_WOOD, SHIELD_IRON,
 	ARMOR_CLOTH, ARMOR_LEATHER,
 	MATERIAL_BRANCH, MATERIAL_HERB, MATERIAL_STONE, MATERIAL_CLOTH, MATERIAL_TORCH,
-	MATERIAL_ORE, MATERIAL_BOTTLE,
+	MATERIAL_ORE, MATERIAL_BOTTLE, MATERIAL_RAW_MEAT,
 	TOOL_REPAIR,
 }
 
@@ -31,7 +32,13 @@ const POTION_MODULATE: Array = [
 ]
 const FOOD_ATLAS        := Vector2i(6, 9)
 const COOKED_FOOD_ATLAS := Vector2i(7, 8)
+const FOOD_ROTTEN_ATLAS := Vector2i(6, 9)   # 상한 식량은 같은 스프라이트에 modulate 적용
+const SCROLL_ATLAS      := Vector2i(0, 8)   # 모든 주문서 공통 아이콘
+const RAW_MEAT_ATLAS    := Vector2i(7, 9)
 const COLORS := ["빨간색", "파란색", "초록색", "노란색", "보라색", "흰색"]
+const SCROLL_NAMES := ["강타 주문서", "순간이동 주문서", "식별 주문서"]
+# 주문서 타입 → 식별 인덱스 (potions 6개 다음 3개)
+const SCROLL_TYPES: Array = [Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY]
 
 # 장비 정의: [이름, ATK보너스, DEF보너스, 내구도, atlas]
 const EQUIPMENT_DATA := {
@@ -61,6 +68,9 @@ static func get_type_name(t: int) -> String:
 		return EQUIPMENT_DATA[t][0]
 	match t:
 		Type.SCROLL_ENHANCE:   return "강화 두루마리"
+		Type.SCROLL_BASH:      return "강타 주문서"
+		Type.SCROLL_TELEPORT:  return "순간이동 주문서"
+		Type.SCROLL_IDENTIFY:  return "식별 주문서"
 		Type.MATERIAL_BRANCH:  return "나뭇가지"
 		Type.MATERIAL_HERB:    return "약초"
 		Type.MATERIAL_STONE:   return "돌"
@@ -68,7 +78,9 @@ static func get_type_name(t: int) -> String:
 		Type.MATERIAL_TORCH:   return "횃불"
 		Type.MATERIAL_ORE:     return "광석"
 		Type.MATERIAL_BOTTLE:  return "빈병"
+		Type.MATERIAL_RAW_MEAT: return "생고기"
 		Type.TOOL_REPAIR:      return "수리도구"
+		Type.FOOD_ROTTEN:      return "상한 식량"
 	return "?"
 
 const POISON_DMG_PER_TURN := 2
@@ -79,16 +91,19 @@ const FIRE_TURNS_ADJ      := 2
 const SLEEP_TURNS         := 3
 
 var item_type: int = Type.FOOD
-var color_idx: int = 0
+var color_idx: int = 0      # 포션: 색상 인덱스 / 주문서: SCROLL_TYPES 인덱스
 var durability: int = 0
 var max_durability: int = 0
 var enhance_level: int = 0
+var is_blessed: bool = false
+var is_cursed: bool = false
+var freshness_turns: int = 0   # 음식 신선도 (0 = 신선, 최대 이후 상함)
 
 func is_equipment() -> bool:
 	return item_type >= Type.WEAPON_WOOD and item_type <= Type.ARMOR_LEATHER
 
 func is_material() -> bool:
-	return item_type >= Type.MATERIAL_BRANCH and item_type <= Type.MATERIAL_BOTTLE
+	return item_type >= Type.MATERIAL_BRANCH and item_type <= Type.MATERIAL_RAW_MEAT
 
 func is_weapon() -> bool:
 	return item_type in [Type.WEAPON_WOOD, Type.WEAPON_STONE, Type.WEAPON_IRON]
@@ -98,6 +113,12 @@ func is_shield() -> bool:
 
 func is_armor() -> bool:
 	return item_type in [Type.ARMOR_CLOTH, Type.ARMOR_LEATHER]
+
+func is_scroll() -> bool:
+	return item_type in [Type.SCROLL_ENHANCE, Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY]
+
+func is_food() -> bool:
+	return item_type in [Type.FOOD, Type.COOKED_FOOD, Type.FOOD_ROTTEN]
 
 func get_equip_atk() -> int:
 	if not is_equipment() or not EQUIPMENT_DATA.has(item_type):
@@ -117,22 +138,32 @@ func get_display_name(identified: bool) -> String:
 	if is_equipment() and EQUIPMENT_DATA.has(item_type):
 		var d: Array = EQUIPMENT_DATA[item_type]
 		var enh := "+%d" % enhance_level if enhance_level > 0 else ""
-		return "%s%s [%d/%d]" % [d[0], enh, durability, max_durability]
+		var suffix := " [저주]" if is_cursed else (" [축복]" if is_blessed else "")
+		return "%s%s [%d/%d]%s" % [d[0], enh, durability, max_durability, suffix]
 	match item_type:
-		Type.FOOD:            return "식량"
-		Type.COOKED_FOOD:     return "익은 식량"
-		Type.MATERIAL_BRANCH: return "나뭇가지"
-		Type.MATERIAL_HERB:   return "약초"
-		Type.MATERIAL_STONE:  return "돌"
-		Type.MATERIAL_CLOTH:  return "천"
-		Type.MATERIAL_TORCH:  return "횃불 (보유 시 시야 확장)"
-		Type.SCROLL_ENHANCE:  return "강화 두루마리"
-		Type.MATERIAL_ORE:    return "광석"
-		Type.MATERIAL_BOTTLE: return "빈병"
-		Type.TOOL_REPAIR:     return "수리도구"
+		Type.FOOD:             return "식량"
+		Type.COOKED_FOOD:      return "익은 식량"
+		Type.FOOD_ROTTEN:      return "상한 식량"
+		Type.MATERIAL_BRANCH:  return "나뭇가지"
+		Type.MATERIAL_HERB:    return "약초"
+		Type.MATERIAL_STONE:   return "돌"
+		Type.MATERIAL_CLOTH:   return "천"
+		Type.MATERIAL_TORCH:   return "횃불 (보유 시 시야 확장)"
+		Type.SCROLL_ENHANCE:   return "강화 두루마리"
+		Type.MATERIAL_ORE:     return "광석"
+		Type.MATERIAL_BOTTLE:  return "빈병"
+		Type.MATERIAL_RAW_MEAT: return "생고기"
+		Type.TOOL_REPAIR:      return "수리도구"
+	if is_scroll():
+		return _scroll_display_name(identified)
 	if identified:
 		return _true_name()
 	return COLORS[color_idx] + " 물약"
+
+func _scroll_display_name(identified: bool) -> String:
+	if identified:
+		return get_type_name(item_type)
+	return "낡은 주문서"
 
 func _true_name() -> String:
 	match item_type:
@@ -147,9 +178,9 @@ func _true_name() -> String:
 func get_reveal_text() -> String:
 	return "%s 물약은 %s이었다!" % [COLORS[color_idx], _true_name()]
 
-# 독/불은 던질 때 효과가 보여서 즉시 공개, 회복/배고픔은 마셔야 공개
+# 독/불/수면은 던질 때 즉시 공개, 주문서도 던질 때 공개
 func reveals_on_throw() -> bool:
-	return item_type == Type.POTION_POISON or item_type == Type.POTION_FIRE or item_type == Type.POTION_SLEEP
+	return item_type in [Type.POTION_POISON, Type.POTION_FIRE, Type.POTION_SLEEP] or is_scroll()
 
 func get_stat_label() -> String:
 	if not is_equipment() or not EQUIPMENT_DATA.has(item_type):
@@ -163,26 +194,34 @@ func get_stat_label() -> String:
 	return ""
 
 func get_modulate() -> Color:
-	if is_equipment() or item_type == Type.FOOD or item_type == Type.COOKED_FOOD \
-			or item_type == Type.SCROLL_ENHANCE:
+	if is_equipment():
+		return Color(1.0, 0.85, 0.6) if is_blessed else (Color(0.65, 0.5, 0.8) if is_cursed else Color.WHITE)
+	if item_type == Type.FOOD or item_type == Type.COOKED_FOOD:
 		return Color.WHITE
+	if item_type == Type.FOOD_ROTTEN:
+		return Color(0.55, 0.75, 0.4)
+	if is_scroll():
+		return Color(0.85, 0.95, 1.0)
 	return POTION_MODULATE[color_idx]
 
 func get_atlas() -> Vector2i:
 	if is_equipment() and EQUIPMENT_DATA.has(item_type):
 		return EQUIPMENT_DATA[item_type][4]
 	match item_type:
-		Type.FOOD:            return FOOD_ATLAS
-		Type.COOKED_FOOD:     return COOKED_FOOD_ATLAS
-		Type.SCROLL_ENHANCE:  return Vector2i(0, 8)
-		Type.MATERIAL_BRANCH: return Vector2i(5, 9)
-		Type.MATERIAL_HERB:   return Vector2i(6, 8)
-		Type.MATERIAL_STONE:  return Vector2i(7, 9)
-		Type.MATERIAL_CLOTH:  return Vector2i(5, 8)
-		Type.MATERIAL_TORCH:  return Vector2i(1, 4)
-		Type.MATERIAL_ORE:    return Vector2i(7, 9)
-		Type.MATERIAL_BOTTLE: return Vector2i(0, 7)
-		Type.TOOL_REPAIR:     return Vector2i(1, 7)
+		Type.FOOD:             return FOOD_ATLAS
+		Type.COOKED_FOOD:      return COOKED_FOOD_ATLAS
+		Type.FOOD_ROTTEN:      return FOOD_ROTTEN_ATLAS
+		Type.SCROLL_ENHANCE, Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY:
+			return SCROLL_ATLAS
+		Type.MATERIAL_BRANCH:  return Vector2i(5, 9)
+		Type.MATERIAL_HERB:    return Vector2i(6, 8)
+		Type.MATERIAL_STONE:   return Vector2i(7, 9)
+		Type.MATERIAL_CLOTH:   return Vector2i(5, 8)
+		Type.MATERIAL_TORCH:   return Vector2i(1, 4)
+		Type.MATERIAL_ORE:     return Vector2i(7, 9)
+		Type.MATERIAL_BOTTLE:  return Vector2i(0, 7)
+		Type.MATERIAL_RAW_MEAT: return Vector2i(7, 9)
+		Type.TOOL_REPAIR:      return Vector2i(1, 7)
 	return COLOR_ATLAS[color_idx]
 
 func apply(player) -> String:
@@ -223,6 +262,11 @@ func apply(player) -> String:
 			player.hunger = max(0, player.hunger - 60)
 			player.stats_changed.emit()
 			return "익은 식량 섭취! 배고픔 -60"
+		Type.FOOD_ROTTEN:
+			player.hunger = max(0, player.hunger - 20)
+			player.apply_status("poison", POISON_TURNS)
+			player.stats_changed.emit()
+			return "상한 식량 섭취! 배고픔 -20, 독 상태이상!"
 		Type.TOOL_REPAIR:
 			var target: Item = null
 			var lowest: float = 1.0
