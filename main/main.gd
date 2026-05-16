@@ -134,7 +134,7 @@ func _init_run() -> void:
 	player.hp = player.max_hp
 	player.max_mp += SaveData.get_bonus_max_mp()
 	player.mp = player.max_mp
-	player.atk += SaveData.get_bonus_atk()
+	player._save_atk_bonus = SaveData.get_bonus_atk()
 
 	if SaveData.has_identify_potion():
 		var rand_idx: int = randi() % 6
@@ -147,6 +147,7 @@ func _init_run() -> void:
 		start_potion.color_idx = color_idx
 		player.inventory.append(start_potion)
 
+	_give_class_starting_gear()
 	enemy_manager.spawn(map.rooms, map, player.floor_num)
 	camera.position = player.position
 	_update_fov()
@@ -413,6 +414,7 @@ func _do_floor_transition(direction: int) -> void:
 
 	var new_floor: int = player.floor_num + direction
 	_run_explore_xp += player.floor_num * 10
+	SaveData.update_best_floor(player.floor_num)
 	if new_floor > MAX_FLOOR:
 		SaveData.add_explore_xp(_run_explore_xp)
 		_run_explore_xp = 0
@@ -897,6 +899,7 @@ func _apply_throw_damage(enemy, dmg: int, source: String) -> void:
 
 func _trigger_game_over() -> void:
 	player.input_blocked = true
+	SaveData.update_best_floor(player.floor_num)
 	SaveData.add_explore_xp(_run_explore_xp)
 	hud.add_log("탐험경험치 +%d XP 획득!" % _run_explore_xp)
 	_run_explore_xp = 0
@@ -1541,6 +1544,57 @@ func _on_bookshelf_approached(tile_pos: Vector2i) -> void:
 		hud.add_log("책장에서 지식을 얻었다! 아이템 1종이 식별되었습니다.")
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
+
+func _give_class_starting_gear() -> void:
+	var food := Item.new()
+	food.item_type = Item.Type.FOOD
+	player.inventory.append(food)
+
+	match player.class_type:
+		Player.ClassType.WARRIOR:
+			_equip_start_weapon(Item.Type.WEAPON_SHORTSWORD)
+			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			for _i in 5:
+				var dart := Item.new(); dart.item_type = Item.Type.MATERIAL_DART
+				if player.inventory.size() < player.MAX_INVENTORY:
+					player.inventory.append(dart)
+		Player.ClassType.MAGE:
+			_equip_start_weapon(Item.Type.WEAPON_STAFF)
+			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			for _i in 5:
+				var dart := Item.new(); dart.item_type = Item.Type.MATERIAL_DART
+				if player.inventory.size() < player.MAX_INVENTORY:
+					player.inventory.append(dart)
+		Player.ClassType.ROGUE:
+			_equip_start_weapon(Item.Type.WEAPON_DAGGER)
+			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			for _i in 5:
+				var dart := Item.new(); dart.item_type = Item.Type.MATERIAL_DART
+				if player.inventory.size() < player.MAX_INVENTORY:
+					player.inventory.append(dart)
+		Player.ClassType.HUNTER:
+			_equip_start_weapon(Item.Type.WEAPON_DAGGER)
+			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			for _i in 5:
+				var arrow := Item.new(); arrow.item_type = Item.Type.MATERIAL_ARROW_WOOD
+				if player.inventory.size() < player.MAX_INVENTORY:
+					player.inventory.append(arrow)
+
+func _equip_start_weapon(wtype: int) -> void:
+	var w := Item.new()
+	w.item_type = wtype
+	if Item.EQUIPMENT_DATA.has(wtype):
+		w.durability = Item.EQUIPMENT_DATA[wtype][3]
+		w.max_durability = w.durability
+	player.equip(w)
+
+func _equip_start_armor(atype: int) -> void:
+	var a := Item.new()
+	a.item_type = atype
+	if Item.EQUIPMENT_DATA.has(atype):
+		a.durability = Item.EQUIPMENT_DATA[atype][3]
+		a.max_durability = a.durability
+	player.equip(a)
 
 func _on_home_requested() -> void:
 	get_tree().call_deferred("change_scene_to_file", "res://home/home.tscn")

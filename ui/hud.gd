@@ -475,8 +475,9 @@ func _draw_top_left() -> void:
 	var hx := pad + 4
 	var hy := pad
 
+	var cls_name: String = SaveData.CLASS_NAMES[SaveData.selected_class]
 	draw_string(font, Vector2(hx, hy + 10),
-		"Lv.%d  ATK:%d  DEF:%d" % [level, atk, def_],
+		"[%s] Lv.%d  ATK:%d  DEF:%d" % [cls_name, level, atk, def_],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#f0c060"))
 
 	hy += 18

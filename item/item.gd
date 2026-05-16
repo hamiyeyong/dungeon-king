@@ -6,6 +6,7 @@ enum Type {
 	FOOD, COOKED_FOOD, FOOD_ROTTEN,
 	SCROLL_ENHANCE, SCROLL_BASH, SCROLL_TELEPORT, SCROLL_IDENTIFY,
 	WEAPON_WOOD, WEAPON_STONE, WEAPON_IRON,
+	WEAPON_SHORTSWORD, WEAPON_STAFF, WEAPON_DAGGER,
 	SHIELD_WOOD, SHIELD_IRON,
 	ARMOR_CLOTH, ARMOR_LEATHER,
 	MATERIAL_BRANCH, MATERIAL_HERB, MATERIAL_STONE, MATERIAL_CLOTH, MATERIAL_TORCH,
@@ -13,6 +14,7 @@ enum Type {
 	MATERIAL_HERB_ICE, MATERIAL_HERB_BLOOD_MOSS, MATERIAL_HERB_GINSENG,
 	MATERIAL_HERB_NIGHTSHADE, MATERIAL_HERB_AMBROSIA, MATERIAL_HERB_MUSHROOM,
 	MATERIAL_HERB_MANDRAKE, MATERIAL_HERB_FIREWORT, MATERIAL_HERB_DREAMGRASS,
+	MATERIAL_DART, MATERIAL_ARROW_WOOD,
 	TOOL_REPAIR,
 }
 
@@ -50,8 +52,11 @@ const EQUIPMENT_DATA := {
 	Type.WEAPON_IRON:    ["철검",     6, 0,  30, Vector2i(2, 3)],
 	Type.SHIELD_WOOD:    ["나무 방패", 0, 1, 12, Vector2i(3, 3)],
 	Type.SHIELD_IRON:    ["철 방패",  0, 3,  25, Vector2i(4, 3)],
-	Type.ARMOR_CLOTH:    ["천 갑옷",  0, 2,  15, Vector2i(5, 3)],
-	Type.ARMOR_LEATHER:  ["가죽 갑옷", 0, 4, 25, Vector2i(6, 3)],
+	Type.ARMOR_CLOTH:       ["천 갑옷",  0, 2,  15, Vector2i(5, 3)],
+	Type.ARMOR_LEATHER:     ["가죽 갑옷", 0, 4, 25, Vector2i(6, 3)],
+	Type.WEAPON_SHORTSWORD: ["숏소드",  4, 0,  20, Vector2i(2, 3)],
+	Type.WEAPON_STAFF:      ["지팡이",  2, 0,  18, Vector2i(0, 3)],
+	Type.WEAPON_DAGGER:     ["단검",    3, 0,  15, Vector2i(1, 3)],
 }
 
 # 제작 레시피: [결과타입, 결과내구도, [[재료타입, 개수], ...]]
@@ -91,6 +96,8 @@ static func get_type_name(t: int) -> String:
 		Type.MATERIAL_HERB_MANDRAKE:     return "만드라고라 뿌리"
 		Type.MATERIAL_HERB_FIREWORT:     return "화염초 꽃잎"
 		Type.MATERIAL_HERB_DREAMGRASS:   return "꿈결초 꽃잎"
+		Type.MATERIAL_DART:              return "다트"
+		Type.MATERIAL_ARROW_WOOD:        return "나무 화살"
 		Type.TOOL_REPAIR:                return "수리도구"
 		Type.FOOD_ROTTEN:                return "상한 식량"
 	return "?"
@@ -115,10 +122,12 @@ func is_equipment() -> bool:
 	return item_type >= Type.WEAPON_WOOD and item_type <= Type.ARMOR_LEATHER
 
 func is_material() -> bool:
-	return item_type >= Type.MATERIAL_BRANCH and item_type <= Type.MATERIAL_HERB_DREAMGRASS
+	return (item_type >= Type.MATERIAL_BRANCH and item_type <= Type.MATERIAL_HERB_DREAMGRASS) \
+		or item_type == Type.MATERIAL_DART or item_type == Type.MATERIAL_ARROW_WOOD
 
 func is_weapon() -> bool:
-	return item_type in [Type.WEAPON_WOOD, Type.WEAPON_STONE, Type.WEAPON_IRON]
+	return item_type in [Type.WEAPON_WOOD, Type.WEAPON_STONE, Type.WEAPON_IRON,
+		Type.WEAPON_SHORTSWORD, Type.WEAPON_STAFF, Type.WEAPON_DAGGER]
 
 func is_shield() -> bool:
 	return item_type in [Type.SHIELD_WOOD, Type.SHIELD_IRON]
@@ -174,6 +183,8 @@ func get_display_name(identified: bool) -> String:
 		Type.MATERIAL_HERB_MANDRAKE:     return "만드라고라 뿌리"
 		Type.MATERIAL_HERB_FIREWORT:     return "화염초 꽃잎"
 		Type.MATERIAL_HERB_DREAMGRASS:   return "꿈결초 꽃잎"
+		Type.MATERIAL_DART:              return "다트"
+		Type.MATERIAL_ARROW_WOOD:        return "나무 화살"
 		Type.TOOL_REPAIR:                return "수리도구"
 	if is_scroll():
 		return _scroll_display_name(identified)
@@ -249,6 +260,8 @@ func get_atlas() -> Vector2i:
 		Type.MATERIAL_HERB_NIGHTSHADE, Type.MATERIAL_HERB_AMBROSIA, Type.MATERIAL_HERB_MUSHROOM,
 		Type.MATERIAL_HERB_MANDRAKE, Type.MATERIAL_HERB_FIREWORT, Type.MATERIAL_HERB_DREAMGRASS:
 			return Vector2i(6, 8)
+		Type.MATERIAL_DART:            return Vector2i(1, 7)
+		Type.MATERIAL_ARROW_WOOD:      return Vector2i(1, 7)
 		Type.TOOL_REPAIR:              return Vector2i(1, 7)
 	return COLOR_ATLAS[color_idx]
 
