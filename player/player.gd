@@ -28,6 +28,17 @@ var tile_pos := Vector2i.ZERO
 var map_ref = null
 var sprite: AnimatedSprite2D
 
+# 직업 시스템
+enum ClassType { WARRIOR = 0, MAGE = 1, ROGUE = 2, HUNTER = 3 }
+var class_type: int = ClassType.WARRIOR
+
+# 기본 스탯 (힘/민첩/체력/지능/운)
+var str_stat: int = 10
+var agi_stat: int = 10
+var vit_stat: int = 10
+var int_stat: int = 10
+var luk_stat: int = 10
+
 var hp := 20
 var max_hp := 20
 var mp := 30
@@ -60,6 +71,7 @@ var wound_turns: int = 0
 var blind_turns: int = 0
 var invincible_turns: int = 0
 var _slow_skip: bool = false
+var _save_atk_bonus: int = 0  # SaveData 마일스톤 ATK 보너스 (recalc 시 반영)
 
 var input_blocked := false
 var hud_ref: Node = null
@@ -116,9 +128,32 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	curse_atk = 0
 	hunger = 0
 	fatigue = 0
-	mp = max_mp
+	exp = 0
+	level = 1
+	floor_num = 1
 	gold = 0
 	next_atk_multiplier = 1
+	# 직업별 스탯 초기화
+	class_type = SaveData.selected_class
+	var cs: Array[int] = _class_stats(class_type)
+	str_stat = cs[0]; agi_stat = cs[1]; vit_stat = cs[2]; int_stat = cs[3]; luk_stat = cs[4]
+	max_hp = 5 + vit_stat * 2
+	max_mp = 5 + int_stat * 2
+	hp = max_hp
+	mp = max_mp
+	inventory.clear()
+	equipped_weapon = null
+	equipped_shield = null
+	equipped_armor = null
+	_recalc_equip_stats()
+
+static func _class_stats(ct: int) -> Array[int]:
+	match ct:
+		0: return [11, 10, 12,  8, 10]  # 전사: STR/AGI/VIT/INT/LUK
+		1: return [10, 10,  9, 12, 10]  # 마법사
+		2: return [10, 11, 10,  9, 11]  # 도적
+		3: return [10, 12,  9, 10, 10]  # 사냥꾼
+	return  [10, 10, 10, 10, 10]
 
 func apply_status(type: String, turns: int) -> void:
 	if type == "poison":
@@ -356,9 +391,12 @@ func unequip_weapon() -> void:
 		stats_changed.emit()
 
 func _recalc_equip_stats() -> void:
-	var base_atk := 5 + (level - 1)
-	var base_def := 1
+	var base_atk: int = 5 + (level - 1) + max(0, str_stat - 10) + _save_atk_bonus
+	var base_def: int = 1
 	atk = base_atk + (equipped_weapon.get_equip_atk() if equipped_weapon else 0) - curse_atk
+	# 전사 패시브: 근거리 무기 데미지 +15%
+	if class_type == ClassType.WARRIOR and equipped_weapon:
+		atk = int(atk * 1.15)
 	def_ = base_def + \
 		(equipped_shield.get_equip_def() if equipped_shield else 0) + \
 		(equipped_armor.get_equip_def()  if equipped_armor  else 0)
@@ -390,9 +428,22 @@ func _level_up() -> void:
 	log_message.emit("레벨이 올랐습니다! (Lv.%d)" % level)
 	stats_changed.emit()
 
+func _try_dodge() -> bool:
+	var pct: int
+	if class_type == ClassType.ROGUE:
+		# 도적 패시브: 경갑 착용 시 민첩 수치 = 회피 보너스 %
+		var light_armor := equipped_armor != null and equipped_armor.item_type == Item.Type.ARMOR_CLOTH
+		pct = agi_stat if light_armor else max(0, agi_stat - 10)
+	else:
+		pct = max(0, agi_stat - 10)
+	return randi() % 100 < pct
+
 func take_damage(amount: int, attacker: String = "적") -> void:
 	if invincible_turns > 0:
 		log_message.emit("%s의 공격! (무적 상태)" % attacker)
+		return
+	if _try_dodge():
+		log_message.emit("%s의 공격을 회피했습니다!" % attacker)
 		return
 	var dmg: int = max(1, amount - def_)
 	hp = max(0, hp - dmg)
