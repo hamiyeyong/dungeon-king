@@ -9,6 +9,9 @@ signal attacked_cell(tile_pos: Vector2i)
 signal campfire_approached(tile_pos: Vector2i)
 signal campfire_out_approached(tile_pos: Vector2i)
 signal merchant_approached(tile_pos: Vector2i)
+signal door_approached(tile_pos: Vector2i)
+signal cauldron_approached(tile_pos: Vector2i)
+signal well_approached(tile_pos: Vector2i)
 
 const TILE_SIZE := 32
 const KNIGHT_PATH  = "res://assets/sprites/doodle-rpg/ALL SPRITES/Knight/Walking/"
@@ -171,9 +174,22 @@ func _try_move(dir: Vector2i) -> void:
 			_attack_enemy(enemy)
 			# turn_done은 공격 애니 종료 후 _on_action_anim_done에서 발행
 			return
+	if map_ref and map_ref.get_cell(next.x, next.y) == map_ref.Cell.DOOR:
+		_update_face_dir(dir)
+		door_approached.emit(next)
+		return
 	if map_ref and map_ref.get_cell(next.x, next.y) == map_ref.Cell.MERCHANT:
 		_update_face_dir(dir)
 		merchant_approached.emit(next)
+		return
+	if map_ref and (map_ref.get_cell(next.x, next.y) == map_ref.Cell.WHITE_CAULDRON or
+			map_ref.get_cell(next.x, next.y) == map_ref.Cell.BLACK_CAULDRON):
+		_update_face_dir(dir)
+		cauldron_approached.emit(next)
+		return
+	if map_ref and map_ref.get_cell(next.x, next.y) == map_ref.Cell.MAGIC_WELL:
+		_update_face_dir(dir)
+		well_approached.emit(next)
 		return
 	if map_ref and map_ref.get_cell(next.x, next.y) == map_ref.Cell.CAMPFIRE:
 		_update_face_dir(dir)
