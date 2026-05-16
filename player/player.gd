@@ -344,9 +344,18 @@ func _on_step(consume_hunger: bool = true) -> void:
 		hunger = min(600, hunger + 1)
 		if hunger >= 600:
 			hp = max(0, hp - 1)
-			log_message.emit("배가 고파 체력이 줄어들고 있습니다!")
+			log_message.emit("굶주림! 체력이 줄어들고 있습니다!")
+		elif hunger >= 450:
+			pass  # 배고픔 상태 — HP 자연 회복 중단 (현재 자연 회복 없음)
 	else:
+		# 대기(wait) 턴 — 피로도 소량 회복
 		fatigue = max(0, fatigue - 3)
+		if fatigue < 450 and mp < max_mp:
+			mp = min(max_mp, mp + 2)
+
+	# MP 자연 회복 (피로도 정상일 때, 이동 턴에도 적용)
+	if consume_hunger and fatigue < 450 and mp < max_mp:
+		mp = min(max_mp, mp + 1)
 	if sleep_turns > 0:
 		sleep_turns -= 1
 		var suffix := " (%d턴 남음)" % sleep_turns if sleep_turns > 0 else " (해제)"

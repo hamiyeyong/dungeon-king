@@ -68,6 +68,8 @@ func _init_run() -> void:
 		enemy_manager.boss_dropped_key.connect(_on_boss_dropped_key)
 	if not enemy_manager.trap_triggered_by_enemy.is_connected(_on_enemy_trap):
 		enemy_manager.trap_triggered_by_enemy.connect(_on_enemy_trap)
+	if not enemy_manager.enemy_dropped_gold.is_connected(_on_enemy_dropped_gold):
+		enemy_manager.enemy_dropped_gold.connect(_on_enemy_dropped_gold)
 	if not hud.wait_requested.is_connected(_on_wait_requested):
 		hud.wait_requested.connect(_on_wait_requested)
 	if not hud.home_requested.is_connected(_on_home_requested):
@@ -289,7 +291,7 @@ func _on_log_message(msg: String) -> void:
 
 func _refresh_hud() -> void:
 	hud.update_stats(player.hp, player.max_hp, player.mp, player.max_mp,
-		player.hunger, player.fatigue, player.floor_num, player.level, player.atk, player.def_)
+		player.hunger, player.fatigue, player.floor_num, player.level, player.atk, player.def_, player.gold)
 	hud.update_inventory(player.inventory, _identified)
 	hud.update_equipped(player.equipped_weapon, player.equipped_shield, player.equipped_armor)
 
@@ -309,6 +311,13 @@ func _on_wait_requested() -> void:
 		hud.add_log("던지기 취소")
 		return
 	player.do_wait()
+
+# ── Gold ───────────────────────────────────────────────────────────────────
+
+func _on_enemy_dropped_gold(amount: int) -> void:
+	player.gold += amount
+	hud.add_log("💰 골드 +%d (총 %dG)" % [amount, player.gold])
+	_refresh_hud()
 
 # ── Stairs / Floor transition ──────────────────────────────────────────────
 
@@ -366,19 +375,60 @@ func _do_floor_transition(direction: int) -> void:
 # ── Chest / Items ──────────────────────────────────────────────────────────
 
 func _open_chest(pos: Vector2i) -> void:
-	if player.inventory.size() >= player.MAX_INVENTORY:
-		hud.add_log("인벤토리가 가득 찼습니다. 상자를 열 수 없습니다.")
-		return
 	map.set_cell(pos.x, pos.y, map.Cell.CHEST_OPEN)
-	var count: int = randi() % 2 + 1
-	for _i in count:
-		if player.inventory.size() >= player.MAX_INVENTORY:
-			hud.add_log("인벤토리가 가득 찼습니다.")
-			break
-		var item := _create_random_item()
-		player.inventory.append(item)
-		var ident_pickup: bool = item.item_type != Item.Type.FOOD and _identified[item.color_idx]
-		hud.add_log(item.get_display_name(ident_pickup) + " 획득!")
+	# 슬롯 A: 포션 or 음식
+	_chest_give_slot_a()
+	# 슬롯 B: 장비 or 재료
+	_chest_give_slot_b()
+	# 보너스 골드: 10~30G
+	var chest_gold: int = randi() % 21 + 10
+	player.gold += chest_gold
+	hud.add_log("💰 골드 +%d (총 %dG)" % [chest_gold, player.gold])
+	_refresh_hud()
+
+func _chest_give_slot_a() -> void:
+	if player.inventory.size() >= player.MAX_INVENTORY:
+		hud.add_log("인벤토리가 가득 차 포션/음식을 받을 수 없습니다.")
+		return
+	var item := Item.new()
+	if randi() % 2 == 0:
+		item.item_type = Item.Type.FOOD
+	else:
+		var cidx: int = randi() % 6
+		item.item_type = _potion_map[cidx]
+		item.color_idx = cidx
+	player.inventory.append(item)
+	var ident: bool = not item.is_food() and _identified[item.color_idx]
+	hud.add_log(item.get_display_name(ident) + " 획득! (상자 A)")
+
+func _chest_give_slot_b() -> void:
+	if player.inventory.size() >= player.MAX_INVENTORY:
+		hud.add_log("인벤토리가 가득 차 장비/재료를 받을 수 없습니다.")
+		return
+	var item := Item.new()
+	var roll: int = randi() % 10
+	if roll < 4:
+		# 장비
+		var equip_types: Array = [
+			Item.Type.WEAPON_WOOD, Item.Type.WEAPON_STONE, Item.Type.WEAPON_IRON,
+			Item.Type.SHIELD_WOOD, Item.Type.SHIELD_IRON,
+			Item.Type.ARMOR_CLOTH, Item.Type.ARMOR_LEATHER,
+		]
+		var etype: int = equip_types[randi() % equip_types.size()]
+		item.item_type = etype
+		if Item.EQUIPMENT_DATA.has(etype):
+			item.durability = Item.EQUIPMENT_DATA[etype][3]
+			item.max_durability = item.durability
+	else:
+		# 재료
+		var mat_types: Array = [
+			Item.Type.MATERIAL_BRANCH, Item.Type.MATERIAL_HERB,
+			Item.Type.MATERIAL_STONE, Item.Type.MATERIAL_CLOTH,
+			Item.Type.MATERIAL_ORE, Item.Type.MATERIAL_TORCH,
+		]
+		item.item_type = mat_types[randi() % mat_types.size()]
+	player.inventory.append(item)
+	hud.add_log(item.get_display_name(true) + " 획득! (상자 B)")
 
 func _drop_item(item: Item, pos: Vector2i) -> void:
 	floor_items.append({"pos": pos, "item": item})
