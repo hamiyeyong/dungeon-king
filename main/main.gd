@@ -147,6 +147,7 @@ func _init_run() -> void:
 		start_potion.color_idx = color_idx
 		player.inventory.append(start_potion)
 
+	player.apply_rune_effects()
 	_give_class_starting_gear()
 	enemy_manager.spawn(map.rooms, map, player.floor_num)
 	camera.position = player.position
@@ -416,6 +417,7 @@ func _do_floor_transition(direction: int) -> void:
 	_run_explore_xp += player.floor_num * 10
 	SaveData.update_best_floor(player.floor_num)
 	if new_floor > MAX_FLOOR:
+		SaveData.award_chest(player.floor_num)
 		SaveData.add_explore_xp(_run_explore_xp)
 		_run_explore_xp = 0
 		_trigger_game_clear()
@@ -900,6 +902,7 @@ func _apply_throw_damage(enemy, dmg: int, source: String) -> void:
 func _trigger_game_over() -> void:
 	player.input_blocked = true
 	SaveData.update_best_floor(player.floor_num)
+	SaveData.award_chest(player.floor_num)
 	SaveData.add_explore_xp(_run_explore_xp)
 	hud.add_log("탐험경험치 +%d XP 획득!" % _run_explore_xp)
 	_run_explore_xp = 0

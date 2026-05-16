@@ -72,6 +72,7 @@ var blind_turns: int = 0
 var invincible_turns: int = 0
 var _slow_skip: bool = false
 var _save_atk_bonus: int = 0  # SaveData 마일스톤 ATK 보너스 (recalc 시 반영)
+var crit_rune_pct: int = 0    # 장착 룬으로 추가된 크리티컬 확률 %
 
 var input_blocked := false
 var hud_ref: Node = null
@@ -133,6 +134,7 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	floor_num = 1
 	gold = 0
 	next_atk_multiplier = 1
+	crit_rune_pct = 0
 	# 직업별 스탯 초기화
 	class_type = SaveData.selected_class
 	var cs: Array[int] = _class_stats(class_type)
@@ -146,6 +148,16 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	equipped_shield = null
 	equipped_armor = null
 	_recalc_equip_stats()
+
+func apply_rune_effects() -> void:
+	crit_rune_pct = 0
+	for rune_id in SaveData.get_equipped_runes():
+		match rune_id:
+			"질긴_생명력":
+				max_hp = int(max_hp * 1.18)
+				hp = max_hp
+			"전투_감각":
+				crit_rune_pct += 10
 
 static func _class_stats(ct: int) -> Array[int]:
 	match ct:
