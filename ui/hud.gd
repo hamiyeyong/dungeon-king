@@ -84,6 +84,28 @@ var _well_popup_indices: Array[int] = []   # 우물에 바칠 수 있는 인벤 
 
 var gold: int = 0
 
+var _status_poison: int = 0
+var _status_fire: int = 0
+var _status_sleep: int = 0
+var _status_paralyze: int = 0
+var _status_frozen: int = 0
+var _status_slow: int = 0
+var _status_wound: int = 0
+var _status_blind: int = 0
+
+func update_status(p_poison: int, p_fire: int, p_sleep: int,
+		p_paralyze: int, p_frozen: int, p_slow: int,
+		p_wound: int, p_blind: int) -> void:
+	_status_poison = p_poison
+	_status_fire = p_fire
+	_status_sleep = p_sleep
+	_status_paralyze = p_paralyze
+	_status_frozen = p_frozen
+	_status_slow = p_slow
+	_status_wound = p_wound
+	_status_blind = p_blind
+	queue_redraw()
+
 func update_stats(p_hp: int, p_max_hp: int, p_mp: int, p_max_mp: int,
 		p_hunger: int, p_fatigue: int, p_floor: int,
 		p_level: int = 1, p_atk: int = 5, p_def: int = 1, p_gold: int = 0) -> void:
@@ -484,6 +506,27 @@ func _draw_top_left() -> void:
 	hy += 16
 	draw_string(font, Vector2(hx, hy + 10), "💰 %d G" % gold,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("#f0d060"))
+
+	# 상태이상 표시
+	var statuses: Array[Dictionary] = []
+	if _status_poison > 0:   statuses.append({"t": "독", "c": Color("#44cc44"), "n": _status_poison})
+	if _status_fire > 0:     statuses.append({"t": "화상", "c": Color("#ff6633"), "n": _status_fire})
+	if _status_sleep > 0:    statuses.append({"t": "수면", "c": Color("#aaaaff"), "n": _status_sleep})
+	if _status_paralyze > 0: statuses.append({"t": "마비", "c": Color("#ffee44"), "n": _status_paralyze})
+	if _status_frozen > 0:   statuses.append({"t": "빙결", "c": Color("#88ddff"), "n": _status_frozen})
+	if _status_slow > 0:     statuses.append({"t": "느림", "c": Color("#aaddff"), "n": _status_slow})
+	if _status_wound > 0:    statuses.append({"t": "부상", "c": Color("#ee4444"), "n": _status_wound})
+	if _status_blind > 0:    statuses.append({"t": "실명", "c": Color("#888888"), "n": _status_blind})
+	if not statuses.is_empty():
+		hy += 14
+		var sx: float = hx
+		for st in statuses:
+			var label: String = "%s%d" % [st.t, st.n]
+			var tw: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x
+			draw_rect(Rect2(sx - 1, hy, tw + 4, 11), Color(0, 0, 0, 0.6))
+			draw_string(font, Vector2(sx + 1, hy + 9), label,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 9, st.c)
+			sx += tw + 7
 
 func _draw_bottom_bar() -> void:
 	var font := ThemeDB.fallback_font
