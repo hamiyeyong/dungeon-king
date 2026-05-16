@@ -11,6 +11,7 @@ const EXTRAS_TEX = preload("res://assets/sprites/doodle-rpg/ALL SPRITES/Extras.p
 const SLIME_RECT := Rect2(310, 282, 80, 70)
 
 var _map_ref = null
+var _floor_num: int = 1
 
 # 몬스터 타입 정의: [이름, atlas_pos, hp_base, hp_per_floor, atk, def_]
 const ENEMY_TYPES := {
@@ -35,6 +36,7 @@ const BOSS_BY_FLOOR := {
 }
 
 signal boss_dropped_key(pos: Vector2)
+signal enemy_dropped_gold(amount: int)
 
 
 # 층별 스폰 테이블: [타입, 비율(weight)]
@@ -76,6 +78,7 @@ func is_boss_floor(floor_num: int) -> bool:
 
 func spawn(rooms: Array[Rect2i], map: Node, floor_num: int) -> void:
 	_map_ref = map
+	_floor_num = floor_num
 	for e in enemies:
 		e.queue_free()
 	enemies.clear()
@@ -152,6 +155,9 @@ func remove_enemy(e) -> void:
 		boss_dropped_key.emit(last_pos)
 	if enemies.is_empty():
 		all_cleared.emit(last_pos)
+	# 골드 드롭: 층 × 랜덤(2~5)
+	var gold_drop: int = max(1, _floor_num) * (randi() % 4 + 2)
+	enemy_dropped_gold.emit(gold_drop)
 
 func tick_statuses() -> Array[Dictionary]:
 	var results: Array[Dictionary] = []

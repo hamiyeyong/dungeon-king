@@ -71,14 +71,17 @@ var _campfire_popup_visible := false
 var _cook_popup_visible := false
 var _cook_popup_indices: Array[int] = []
 
+var gold: int = 0
+
 func update_stats(p_hp: int, p_max_hp: int, p_mp: int, p_max_mp: int,
 		p_hunger: int, p_fatigue: int, p_floor: int,
-		p_level: int = 1, p_atk: int = 5, p_def: int = 1) -> void:
+		p_level: int = 1, p_atk: int = 5, p_def: int = 1, p_gold: int = 0) -> void:
 	hp = p_hp; max_hp = p_max_hp
 	mp = p_mp; max_mp = p_max_mp
 	hunger = p_hunger; fatigue = p_fatigue
 	floor_num = p_floor; level = p_level
 	atk = p_atk; def_ = p_def
+	gold = p_gold
 	queue_redraw()
 
 func update_inventory(items: Array[Item], identified: Array) -> void:
@@ -357,7 +360,7 @@ func _draw_top_left() -> void:
 	var bar_w := 190
 	var bar_h := 11
 	var gap := 4
-	var panel_h := pad * 2 + 18 + (bar_h + gap) * 3 + 14
+	var panel_h := pad * 2 + 18 + (bar_h + gap) * 3 + 14 + 16
 	draw_rect(Rect2(0, 0, bar_w + pad * 2 + 4, panel_h), Color(0, 0, 0, 0.55))
 
 	var hx := pad + 4
@@ -392,6 +395,10 @@ func _draw_top_left() -> void:
 		(Color(1.0, 0.8, 0.3) if fatigue < 600 else Color(1.0, 0.3, 0.3))
 	draw_string(font, Vector2(hx, hy + 10), "피로도: %d / 600" % fatigue,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, fatigue_color)
+
+	hy += 16
+	draw_string(font, Vector2(hx, hy + 10), "💰 %d G" % gold,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("#f0d060"))
 
 func _draw_bottom_bar() -> void:
 	var font := ThemeDB.fallback_font
