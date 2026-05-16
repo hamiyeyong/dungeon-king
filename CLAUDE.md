@@ -1,5 +1,6 @@
 # 던전왕이 될 거야 — Claude Code 작업 규칙
 
+@.claude/AGENT.md
 @docs/rules/spec-first.md
 @docs/rules/gdscript-rules.md
 @docs/rules/workflow.md
