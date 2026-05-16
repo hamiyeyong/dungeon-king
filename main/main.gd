@@ -219,6 +219,13 @@ func _on_player_turn_done() -> void:
 	if cell == map.Cell.ALTAR or cell == map.Cell.ALTAR_BIG:
 		_trigger_altar(player.tile_pos, cell)
 
+	if cell in [
+		map.Cell.HERB_ICE, map.Cell.HERB_BLOOD_MOSS, map.Cell.HERB_GINSENG,
+		map.Cell.HERB_NIGHTSHADE, map.Cell.HERB_AMBROSIA, map.Cell.HERB_MUSHROOM,
+		map.Cell.HERB_MANDRAKE, map.Cell.HERB_FIREWORT, map.Cell.HERB_DREAMGRASS,
+	]:
+		_trigger_herb(player.tile_pos, cell)
+
 	if cell == map.Cell.STAIRS:
 		_show_stairs_popup()
 		return
@@ -348,7 +355,7 @@ func _refresh_hud() -> void:
 		player.hunger, player.fatigue, player.floor_num, player.level, player.atk, player.def_, player.gold)
 	hud.update_status(player.poison_turns, player.fire_turns, player.sleep_turns,
 		player.paralyze_turns, player.frozen_turns, player.slow_turns,
-		player.wound_turns, player.blind_turns)
+		player.wound_turns, player.blind_turns, player.invincible_turns)
 	hud.update_inventory(player.inventory, _identified)
 	hud.update_equipped(player.equipped_weapon, player.equipped_shield, player.equipped_armor)
 
@@ -1353,6 +1360,73 @@ func _trigger_altar(pos: Vector2i, cell: int) -> void:
 	player.inventory.append(item)
 	var label := "대제단" if cell == map.Cell.ALTAR_BIG else "제단"
 	hud.add_log("%s에서 %s 획득!" % [label, item.get_display_name(true)])
+	_refresh_hud()
+
+# ── 약초밭 상호작용 ──────────────────────────────────────────────────────────
+
+func _trigger_herb(pos: Vector2i, cell: int) -> void:
+	map.set_cell(pos.x, pos.y, map.Cell.FLOOR)
+	var drop_type: int = -1
+	match cell:
+		map.Cell.HERB_ICE:
+			player.apply_status("frozen", 2)
+			hud.add_log("얼음송이밭! 빙결 상태 (2턴).")
+			drop_type = Item.Type.MATERIAL_HERB_ICE
+		map.Cell.HERB_BLOOD_MOSS:
+			player.hp = max(0, player.hp - 3)
+			player.apply_status("paralyze", 3)
+			hud.add_log("피이끼밭! HP -3, 마비 (3턴).")
+			drop_type = Item.Type.MATERIAL_HERB_BLOOD_MOSS
+		map.Cell.HERB_GINSENG:
+			var heal: int = randi_range(10, 15)
+			player.hp = min(player.max_hp, player.hp + heal)
+			hud.add_log("산삼밭! HP +%d 회복." % heal)
+			drop_type = Item.Type.MATERIAL_HERB_GINSENG
+		map.Cell.HERB_NIGHTSHADE:
+			player.hp = max(0, player.hp - 5)
+			player.apply_status("poison", Item.POISON_TURNS)
+			hud.add_log("나이트쉐이드밭! HP -5, 독 (%d턴)." % Item.POISON_TURNS)
+			for adj in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1),
+						Vector2i(2,0), Vector2i(-2,0), Vector2i(0,2), Vector2i(0,-2)]:
+				var e = enemy_manager.get_enemy_at(pos + adj)
+				if e and is_instance_valid(e):
+					e.apply_status("poison", Item.POISON_TURNS)
+					hud.add_log("독가스가 %s에게 퍼졌다!" % e.display_name)
+			drop_type = Item.Type.MATERIAL_HERB_NIGHTSHADE
+		map.Cell.HERB_AMBROSIA:
+			player.invincible_turns = 10
+			hud.add_log("암브로시아밭! 무적 상태 (10턴).")
+			drop_type = Item.Type.MATERIAL_HERB_AMBROSIA
+		map.Cell.HERB_MUSHROOM:
+			var heal: int = randi_range(6, 10)
+			player.hp = min(player.max_hp, player.hp + heal)
+			hud.add_log("영지버섯밭! HP +%d 재생." % heal)
+			drop_type = Item.Type.MATERIAL_HERB_MUSHROOM
+		map.Cell.HERB_MANDRAKE:
+			if randi() % 5 == 0:
+				player.hp = max(0, player.hp - 5)
+				hud.add_log("만드라고라밭! 비명에 HP -5.")
+			else:
+				var mp_gain: int = randi_range(15, 20)
+				player.mp = min(player.max_mp, player.mp + mp_gain)
+				hud.add_log("만드라고라밭! MP +%d." % mp_gain)
+			drop_type = Item.Type.MATERIAL_HERB_MANDRAKE
+		map.Cell.HERB_FIREWORT:
+			player.apply_status("fire", Item.FIRE_TURNS)
+			hud.add_log("화염초밭! 화염 상태 (%d턴)." % Item.FIRE_TURNS)
+			drop_type = Item.Type.MATERIAL_HERB_FIREWORT
+		map.Cell.HERB_DREAMGRASS:
+			player.hp = max(0, player.hp - 2)
+			player.apply_status("sleep", Item.SLEEP_TURNS)
+			player.fatigue = max(0, player.fatigue - 150)
+			hud.add_log("꿈결초밭! HP -2, 수면 (%d턴), 피로도 -150." % Item.SLEEP_TURNS)
+			drop_type = Item.Type.MATERIAL_HERB_DREAMGRASS
+	if drop_type >= 0 and player.inventory.size() < player.MAX_INVENTORY:
+		var herb_mat := Item.new()
+		herb_mat.item_type = drop_type
+		player.inventory.append(herb_mat)
+		hud.add_log("%s 획득!" % Item.get_type_name(drop_type))
+	player.stats_changed.emit()
 	_refresh_hud()
 
 # ── 해골더미 상호작용 ────────────────────────────────────────────────────────

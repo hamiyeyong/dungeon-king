@@ -17,6 +17,9 @@ enum Cell {
 	KNOWLEDGE_TABLET,
 	WIZARD_STATUE, WARRIOR_STATUE, ANGEL_STATUE,
 	BOOKSHELF,
+	HERB_ICE, HERB_BLOOD_MOSS, HERB_GINSENG,
+	HERB_NIGHTSHADE, HERB_AMBROSIA, HERB_MUSHROOM,
+	HERB_MANDRAKE, HERB_FIREWORT, HERB_DREAMGRASS,
 }
 
 # 타일셋 atlas 좌표 (col, row) — tiles-64.png 기준
@@ -218,6 +221,20 @@ func _place_objects(floor_num: int = 1) -> void:
 		var pos: Vector2i = room_tiles.pop_back()
 		grid[pos.y][pos.x] = obj_type
 
+	# 약초밭: 층당 2~4종 랜덤 배치
+	var all_herbs: Array[int] = [
+		Cell.HERB_ICE, Cell.HERB_BLOOD_MOSS, Cell.HERB_GINSENG,
+		Cell.HERB_NIGHTSHADE, Cell.HERB_AMBROSIA, Cell.HERB_MUSHROOM,
+		Cell.HERB_MANDRAKE, Cell.HERB_FIREWORT, Cell.HERB_DREAMGRASS,
+	]
+	all_herbs.shuffle()
+	var herb_count: int = randi_range(2, 4)
+	for i in range(min(herb_count, all_herbs.size())):
+		if room_tiles.is_empty():
+			break
+		var hpos: Vector2i = room_tiles.pop_back()
+		grid[hpos.y][hpos.x] = all_herbs[i]
+
 	# 수풀: 바닥 타일의 약 2.5% 배치
 	for y in range(1, HEIGHT - 1):
 		for x in range(1, WIDTH - 1):
@@ -314,6 +331,24 @@ func _draw() -> void:
 						draw_rect(dest, Color(0.75, 0.75, 0.8, 0.85))
 					elif cell == Cell.BOOKSHELF:
 						draw_rect(dest, Color(0.45, 0.3, 0.15, 0.85))
+					elif cell == Cell.HERB_ICE:
+						draw_rect(dest, Color(0.75, 0.9, 1.0, 0.85))
+					elif cell == Cell.HERB_BLOOD_MOSS:
+						draw_rect(dest, Color(0.6, 0.1, 0.15, 0.85))
+					elif cell == Cell.HERB_GINSENG:
+						draw_rect(dest, Color(0.9, 0.85, 0.6, 0.85))
+					elif cell == Cell.HERB_NIGHTSHADE:
+						draw_rect(dest, Color(0.25, 0.1, 0.35, 0.85))
+					elif cell == Cell.HERB_AMBROSIA:
+						draw_rect(dest, Color(0.95, 0.85, 0.3, 0.85))
+					elif cell == Cell.HERB_MUSHROOM:
+						draw_rect(dest, Color(0.5, 0.35, 0.4, 0.85))
+					elif cell == Cell.HERB_MANDRAKE:
+						draw_rect(dest, Color(0.35, 0.6, 0.3, 0.85))
+					elif cell == Cell.HERB_FIREWORT:
+						draw_rect(dest, Color(0.9, 0.35, 0.1, 0.85))
+					elif cell == Cell.HERB_DREAMGRASS:
+						draw_rect(dest, Color(0.55, 0.45, 0.75, 0.85))
 					else:
 						_blit(dest, _cell_atlas(cell))
 					# 특수 오브젝트 텍스트 레이블
@@ -342,6 +377,15 @@ func _draw() -> void:
 						Cell.WARRIOR_STATUE: _draw_obj_label(dest, "전사상", Color("#aabb88"))
 						Cell.ANGEL_STATUE:   _draw_obj_label(dest, "천사상", Color("#ffffff"))
 						Cell.BOOKSHELF:      _draw_obj_label(dest, "책장", Color("#ddaa66"))
+						Cell.HERB_ICE:       _draw_obj_label(dest, "얼음송이", Color("#b8e8ff"))
+						Cell.HERB_BLOOD_MOSS:_draw_obj_label(dest, "피이끼", Color("#ff6666"))
+						Cell.HERB_GINSENG:   _draw_obj_label(dest, "산삼", Color("#f5dda0"))
+						Cell.HERB_NIGHTSHADE:_draw_obj_label(dest, "나이트쉐이드", Color("#bb88ff"))
+						Cell.HERB_AMBROSIA:  _draw_obj_label(dest, "암브로시아", Color("#ffe066"))
+						Cell.HERB_MUSHROOM:  _draw_obj_label(dest, "영지버섯", Color("#cc99bb"))
+						Cell.HERB_MANDRAKE:  _draw_obj_label(dest, "만드라고라", Color("#88cc66"))
+						Cell.HERB_FIREWORT:  _draw_obj_label(dest, "화염초", Color("#ff8844"))
+						Cell.HERB_DREAMGRASS:_draw_obj_label(dest, "꿈결초", Color("#cc99ff"))
 			if has_fov:
 				if not vis:
 					draw_rect(dest, Color(0, 0, 0, 0.6))

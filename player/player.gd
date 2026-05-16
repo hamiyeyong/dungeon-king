@@ -58,6 +58,7 @@ var frozen_turns: int = 0
 var slow_turns: int = 0
 var wound_turns: int = 0
 var blind_turns: int = 0
+var invincible_turns: int = 0
 var _slow_skip: bool = false
 
 var input_blocked := false
@@ -110,6 +111,7 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	slow_turns = 0
 	wound_turns = 0
 	blind_turns = 0
+	invincible_turns = 0
 	_slow_skip = false
 	curse_atk = 0
 	hunger = 0
@@ -389,6 +391,9 @@ func _level_up() -> void:
 	stats_changed.emit()
 
 func take_damage(amount: int, attacker: String = "적") -> void:
+	if invincible_turns > 0:
+		log_message.emit("%s의 공격! (무적 상태)" % attacker)
+		return
 	var dmg: int = max(1, amount - def_)
 	hp = max(0, hp - dmg)
 	log_message.emit("%s에게 %d 피해를 입었습니다." % [attacker, dmg])
@@ -465,6 +470,10 @@ func _on_step(consume_hunger: bool = true) -> void:
 		hp = max(0, hp - 1)
 		var suffix := " (%d턴 남음)" % wound_turns if wound_turns > 0 else " (해제)"
 		log_message.emit("부상! HP -1%s" % suffix)
+	if invincible_turns > 0:
+		invincible_turns -= 1
+		var suffix := " (%d턴 남음)" % invincible_turns if invincible_turns > 0 else " (해제)"
+		log_message.emit("무적%s" % suffix)
 	if blind_turns > 0:
 		blind_turns -= 1
 		var suffix := " (%d턴 남음)" % blind_turns if blind_turns > 0 else " (해제)"
