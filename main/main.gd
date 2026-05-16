@@ -1461,7 +1461,7 @@ func _on_skull_approached(tile_pos: Vector2i) -> void:
 				item.item_type = _potion_map[cidx]
 				item.color_idx = cidx
 		player.inventory.append(item)
-		hud.add_log("해골더미에서 %s 발견!" % item.get_display_name(_identified.get(item.color_idx, false)))
+		hud.add_log("해골더미에서 %s 발견!" % item.get_display_name(item.color_idx < _identified.size() and _identified[item.color_idx]))
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
 
