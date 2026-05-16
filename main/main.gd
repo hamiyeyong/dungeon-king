@@ -31,6 +31,17 @@ var _campfire_tile_pos: Vector2i = Vector2i.ZERO
 # 상인 상점
 var _shop_items: Array[Dictionary] = []   # {item: Item, price: int, sold: bool}
 
+# 함정 종류 사전 배정 (0~9)
+var _trap_data: Dictionary = {}
+
+# 우물 위치 (사용 후 비활성화)
+var _well_tile_pos: Vector2i = Vector2i(-1, -1)
+
+const PARALYZE_TURNS := 3
+const FROZEN_TURNS   := 2
+const WOUND_TURNS    := 6
+const BLIND_TURNS    := 4
+
 func _ready() -> void:
 	_init_run()
 
@@ -48,6 +59,7 @@ func _init_run() -> void:
 	floor_items.clear()
 
 	map.generate(player.floor_num)
+	_assign_trap_types()
 	var start: Vector2i = map.get_start_pos()
 	player.init(start, map)
 	player.enemy_manager_ref = enemy_manager
@@ -154,13 +166,18 @@ func _unhandled_input(event: InputEvent) -> void:
 # ── Turn flow ──────────────────────────────────────────────────────────────
 
 func _update_fov() -> void:
-	# 횃불 보유 시 시야 반경 크게 확장
 	var has_torch := false
 	for inv_item in player.inventory:
 		if inv_item.item_type == Item.Type.MATERIAL_TORCH:
 			has_torch = true
 			break
-	var radius: int = 10 if has_torch else 4
+	var radius: int
+	if player.blind_turns > 0:
+		radius = 2
+	elif has_torch:
+		radius = 10
+	else:
+		radius = 4
 
 	# 맵의 모닥불 위치를 광원으로 수집
 	var light_sources: Array[Vector2i] = []
@@ -315,6 +332,9 @@ func _on_log_message(msg: String) -> void:
 func _refresh_hud() -> void:
 	hud.update_stats(player.hp, player.max_hp, player.mp, player.max_mp,
 		player.hunger, player.fatigue, player.floor_num, player.level, player.atk, player.def_, player.gold)
+	hud.update_status(player.poison_turns, player.fire_turns, player.sleep_turns,
+		player.paralyze_turns, player.frozen_turns, player.slow_turns,
+		player.wound_turns, player.blind_turns)
 	hud.update_inventory(player.inventory, _identified)
 	hud.update_equipped(player.equipped_weapon, player.equipped_shield, player.equipped_armor)
 
@@ -502,8 +522,18 @@ func _try_pickup_floor_items() -> void:
 		_refresh_floor_items()
 		_refresh_hud()
 
+func _assign_trap_types() -> void:
+	_trap_data.clear()
+	for y in map.HEIGHT:
+		for x in map.WIDTH:
+			if map.get_cell(x, y) == map.Cell.TRAP:
+				_trap_data[Vector2i(x, y)] = randi() % 10
+
 func _on_enemy_trap(tile_pos: Vector2i, enemy) -> void:
-	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
+	var trap_type: int = _trap_data.get(tile_pos, 0)
+	if trap_type != 3:  # 스파이크 함정은 비활성화 안 됨
+		map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
+		_trap_data.erase(tile_pos)
 	if not is_instance_valid(enemy):
 		return
 	_spawn_hit(enemy.position)
@@ -516,20 +546,24 @@ func _on_enemy_trap(tile_pos: Vector2i, enemy) -> void:
 		player.gain_exp(reward)
 
 func _trigger_trap(pos: Vector2i) -> void:
-	map.set_cell(pos.x, pos.y, map.Cell.FLOOR)
+	var trap_type: int = _trap_data.get(pos, randi() % 10)
+	# 스파이크 함정은 계속 활성
+	if trap_type != 3:
+		map.set_cell(pos.x, pos.y, map.Cell.FLOOR)
+		_trap_data.erase(pos)
 	_spawn_hit(player.position)
-	match randi() % 3:
-		0:  # 독가시 함정
+	match trap_type:
+		0:  # 독가시
 			player.take_damage(5, "독가시 함정")
 			player.apply_status("poison", Item.POISON_TURNS)
 			_spawn_poison(player.position)
-			hud.add_log("독가시 함정! HP -5 + 독 상태이상")
-		1:  # 화염 함정
+			hud.add_log("독가시 함정! HP -5 + 독")
+		1:  # 화염
 			player.take_damage(8, "화염 함정")
 			player.apply_status("fire", Item.FIRE_TURNS)
 			_spawn_fire(player.position)
-			hud.add_log("화염 함정! HP -8 + 화상 상태이상")
-		2:  # 텔레포트 함정
+			hud.add_log("화염 함정! HP -8 + 화상")
+		2:  # 텔레포트
 			var floor_tiles: Array[Vector2i] = []
 			for y in map.HEIGHT:
 				for x in map.WIDTH:
@@ -541,6 +575,29 @@ func _trigger_trap(pos: Vector2i) -> void:
 				player.position = map.tile_to_world(player.tile_pos)
 				_update_fov()
 			hud.add_log("텔레포트 함정! 랜덤 위치로 이동했습니다.")
+		3:  # 스파이크 (비활성화 안 됨, 반복 발동)
+			player.take_damage(15, "스파이크 함정")
+			hud.add_log("스파이크 함정! HP -15")
+		4:  # 부상
+			player.take_damage(3, "부상 함정")
+			player.apply_status("wound", WOUND_TURNS)
+			hud.add_log("부상 함정! HP -3 + 부상 (%d턴)" % WOUND_TURNS)
+		5:  # 독구름
+			player.apply_status("poison", Item.POISON_TURNS * 2)
+			_spawn_poison(player.position)
+			hud.add_log("독구름 함정! 강한 독 상태이상")
+		6:  # 마비가스
+			player.apply_status("paralyze", PARALYZE_TURNS)
+			hud.add_log("마비가스 함정! 마비 (%d턴)" % PARALYZE_TURNS)
+		7:  # 얼음
+			player.apply_status("frozen", FROZEN_TURNS)
+			hud.add_log("얼음 함정! 빙결 (%d턴)" % FROZEN_TURNS)
+		8:  # 소환 (미구현 — 일단 데미지)
+			player.take_damage(4, "소환 함정")
+			hud.add_log("소환 함정! 이상한 기운이 느껴진다...")
+		9:  # 알람 (미구현 — 일단 데미지)
+			player.take_damage(2, "알람 함정")
+			hud.add_log("알람 함정! 요란한 소리가 울렸다!")
 	_refresh_hud()
 	if player.hp <= 0:
 		_trigger_game_over()
@@ -1136,7 +1193,8 @@ func _on_cauldron_cancelled() -> void:
 
 # ── 이상한 우물 상호작용 ────────────────────────────────────────────────────
 
-func _on_well_approached(_tile_pos: Vector2i) -> void:
+func _on_well_approached(tile_pos: Vector2i) -> void:
+	_well_tile_pos = tile_pos
 	if player.inventory.is_empty():
 		hud.add_log("바칠 아이템이 없습니다.")
 		enemy_manager.do_turns(player.tile_pos)
@@ -1186,6 +1244,10 @@ func _on_well_item_selected(inv_idx: int) -> void:
 			item.is_blessed = false
 			player.inventory.append(item)
 			hud.add_log("우물이 %s에 저주를 걸었습니다! [저주]" % item_name)
+	# 우물은 한 번만 사용 가능 — 사용 후 바닥으로 변환
+	if _well_tile_pos != Vector2i(-1, -1):
+		map.set_cell(_well_tile_pos.x, _well_tile_pos.y, map.Cell.FLOOR)
+		_well_tile_pos = Vector2i(-1, -1)
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
 

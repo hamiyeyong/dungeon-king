@@ -266,6 +266,22 @@ func _draw() -> void:
 						_draw_merchant_marker(dest)
 					else:
 						_blit(dest, _cell_atlas(cell))
+					# 특수 오브젝트 텍스트 레이블
+					match cell:
+						Cell.CHEST:          _draw_obj_label(dest, "상자", Color("#f0d060"))
+						Cell.CHEST_OPEN:     _draw_obj_label(dest, "빈상자", Color("#888888"))
+						Cell.GRASS:          _draw_obj_label(dest, "수풀", Color("#88cc44"))
+						Cell.JAR:            _draw_obj_label(dest, "항아리", Color("#ddbb88"))
+						Cell.CAMPFIRE:       _draw_obj_label(dest, "야영지", Color("#ffaa44"))
+						Cell.CAMPFIRE_OUT:   _draw_obj_label(dest, "야영지↓", Color("#888888"))
+						Cell.TRAP:           _draw_obj_label(dest, "함정!", Color("#ff4444"))
+						Cell.DOOR:           _draw_obj_label(dest, "문", Color("#ddbb88"))
+						Cell.DOOR_OPEN:      _draw_obj_label(dest, "문(열)", Color("#bbaa77"))
+						Cell.WHITE_CAULDRON: _draw_obj_label(dest, "흰솥", Color("#ccddff"))
+						Cell.BLACK_CAULDRON: _draw_obj_label(dest, "검솥", Color("#cc99ff"))
+						Cell.MAGIC_WELL:     _draw_obj_label(dest, "우물", Color("#88ddff"))
+						Cell.MERCHANT:       _draw_obj_label(dest, "상점", Color("#f0d060"))
+						Cell.STAIRS:         _draw_obj_label(dest, "계단", Color("#ffffaa"))
 			if has_fov:
 				if not vis:
 					draw_rect(dest, Color(0, 0, 0, 0.6))
@@ -317,6 +333,13 @@ func _blit(dest: Rect2, atlas: Vector2i) -> void:
 func _blit_tinted(dest: Rect2, atlas: Vector2i, tint: Color) -> void:
 	var src := Rect2(atlas.x * ATLAS_TILE, atlas.y * ATLAS_TILE, ATLAS_TILE, ATLAS_TILE)
 	draw_texture_rect_region(TILESET, dest, src, tint)
+
+func _draw_obj_label(dest: Rect2, text: String, color: Color) -> void:
+	var font := ThemeDB.fallback_font
+	var cy: float = dest.position.y + dest.size.y - 1
+	draw_rect(Rect2(dest.position.x, cy - 9, dest.size.x, 10), Color(0, 0, 0, 0.6))
+	draw_string(font, Vector2(dest.position.x, cy), text,
+		HORIZONTAL_ALIGNMENT_CENTER, dest.size.x, 8, color)
 
 func _draw_merchant_marker(dest: Rect2) -> void:
 	var cx: float = dest.position.x + dest.size.x * 0.5
