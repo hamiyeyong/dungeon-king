@@ -3,7 +3,14 @@
     "allow": [
       "Bash(brew install *)",
       "Bash(identify /Users/chaewonham/ysham/dungeon-king/assets/sprites/doodle-rogue/tiles-64.png)",
-      "Bash(sips -g pixelWidth -g pixelHeight /Users/chaewonham/ysham/dungeon-king/assets/sprites/doodle-rogue/tiles-64.png)"
+      "Bash(sips -g pixelWidth -g pixelHeight /Users/chaewonham/ysham/dungeon-king/assets/sprites/doodle-rogue/tiles-64.png)",
+      "Bash(sort -k2)",
+      "Bash(xargs -0 file)",
+      "Bash(awk '{printf \"%10s\\\\t%s\\\\n\", $1, $2}')",
+      "Bash(awk '{printf \"%10s bytes\\\\t%s\\\\n\", $1, $2}')",
+      "Skill(shared:create-pr)",
+      "Skill(shared:create-pr:*)",
+      "Bash(GH_TOKEN=$\\(gh auth token --hostname github.com\\) git push -u origin feat/home-exploration-xp)"
     ]
   }
 }
