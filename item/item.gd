@@ -10,6 +10,9 @@ enum Type {
 	ARMOR_CLOTH, ARMOR_LEATHER,
 	MATERIAL_BRANCH, MATERIAL_HERB, MATERIAL_STONE, MATERIAL_CLOTH, MATERIAL_TORCH,
 	MATERIAL_ORE, MATERIAL_BOTTLE, MATERIAL_RAW_MEAT,
+	MATERIAL_HERB_ICE, MATERIAL_HERB_BLOOD_MOSS, MATERIAL_HERB_GINSENG,
+	MATERIAL_HERB_NIGHTSHADE, MATERIAL_HERB_AMBROSIA, MATERIAL_HERB_MUSHROOM,
+	MATERIAL_HERB_MANDRAKE, MATERIAL_HERB_FIREWORT, MATERIAL_HERB_DREAMGRASS,
 	TOOL_REPAIR,
 }
 
@@ -78,9 +81,18 @@ static func get_type_name(t: int) -> String:
 		Type.MATERIAL_TORCH:   return "횃불"
 		Type.MATERIAL_ORE:     return "광석"
 		Type.MATERIAL_BOTTLE:  return "빈병"
-		Type.MATERIAL_RAW_MEAT: return "생고기"
-		Type.TOOL_REPAIR:      return "수리도구"
-		Type.FOOD_ROTTEN:      return "상한 식량"
+		Type.MATERIAL_RAW_MEAT:          return "생고기"
+		Type.MATERIAL_HERB_ICE:          return "식은 얼음송이"
+		Type.MATERIAL_HERB_BLOOD_MOSS:   return "말린 피이끼"
+		Type.MATERIAL_HERB_GINSENG:      return "산삼 뿌리"
+		Type.MATERIAL_HERB_NIGHTSHADE:   return "나이트쉐이드 잎"
+		Type.MATERIAL_HERB_AMBROSIA:     return "암브로시아 꽃"
+		Type.MATERIAL_HERB_MUSHROOM:     return "말린 영지버섯"
+		Type.MATERIAL_HERB_MANDRAKE:     return "만드라고라 뿌리"
+		Type.MATERIAL_HERB_FIREWORT:     return "화염초 꽃잎"
+		Type.MATERIAL_HERB_DREAMGRASS:   return "꿈결초 꽃잎"
+		Type.TOOL_REPAIR:                return "수리도구"
+		Type.FOOD_ROTTEN:                return "상한 식량"
 	return "?"
 
 const POISON_DMG_PER_TURN := 2
@@ -103,7 +115,7 @@ func is_equipment() -> bool:
 	return item_type >= Type.WEAPON_WOOD and item_type <= Type.ARMOR_LEATHER
 
 func is_material() -> bool:
-	return item_type >= Type.MATERIAL_BRANCH and item_type <= Type.MATERIAL_RAW_MEAT
+	return item_type >= Type.MATERIAL_BRANCH and item_type <= Type.MATERIAL_HERB_DREAMGRASS
 
 func is_weapon() -> bool:
 	return item_type in [Type.WEAPON_WOOD, Type.WEAPON_STONE, Type.WEAPON_IRON]
@@ -152,8 +164,17 @@ func get_display_name(identified: bool) -> String:
 		Type.SCROLL_ENHANCE:   return "강화 두루마리"
 		Type.MATERIAL_ORE:     return "광석"
 		Type.MATERIAL_BOTTLE:  return "빈병"
-		Type.MATERIAL_RAW_MEAT: return "생고기"
-		Type.TOOL_REPAIR:      return "수리도구"
+		Type.MATERIAL_RAW_MEAT:          return "생고기"
+		Type.MATERIAL_HERB_ICE:          return "식은 얼음송이"
+		Type.MATERIAL_HERB_BLOOD_MOSS:   return "말린 피이끼"
+		Type.MATERIAL_HERB_GINSENG:      return "산삼 뿌리"
+		Type.MATERIAL_HERB_NIGHTSHADE:   return "나이트쉐이드 잎"
+		Type.MATERIAL_HERB_AMBROSIA:     return "암브로시아 꽃"
+		Type.MATERIAL_HERB_MUSHROOM:     return "말린 영지버섯"
+		Type.MATERIAL_HERB_MANDRAKE:     return "만드라고라 뿌리"
+		Type.MATERIAL_HERB_FIREWORT:     return "화염초 꽃잎"
+		Type.MATERIAL_HERB_DREAMGRASS:   return "꿈결초 꽃잎"
+		Type.TOOL_REPAIR:                return "수리도구"
 	if is_scroll():
 		return _scroll_display_name(identified)
 	if identified:
@@ -223,8 +244,12 @@ func get_atlas() -> Vector2i:
 		Type.MATERIAL_TORCH:   return Vector2i(1, 4)
 		Type.MATERIAL_ORE:     return Vector2i(7, 9)
 		Type.MATERIAL_BOTTLE:  return Vector2i(0, 7)
-		Type.MATERIAL_RAW_MEAT: return Vector2i(7, 9)
-		Type.TOOL_REPAIR:      return Vector2i(1, 7)
+		Type.MATERIAL_RAW_MEAT:        return Vector2i(7, 9)
+		Type.MATERIAL_HERB_ICE, Type.MATERIAL_HERB_BLOOD_MOSS, Type.MATERIAL_HERB_GINSENG,
+		Type.MATERIAL_HERB_NIGHTSHADE, Type.MATERIAL_HERB_AMBROSIA, Type.MATERIAL_HERB_MUSHROOM,
+		Type.MATERIAL_HERB_MANDRAKE, Type.MATERIAL_HERB_FIREWORT, Type.MATERIAL_HERB_DREAMGRASS:
+			return Vector2i(6, 8)
+		Type.TOOL_REPAIR:              return Vector2i(1, 7)
 	return COLOR_ATLAS[color_idx]
 
 func apply(player) -> String:

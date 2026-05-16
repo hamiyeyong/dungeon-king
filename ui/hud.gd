@@ -92,10 +92,11 @@ var _status_frozen: int = 0
 var _status_slow: int = 0
 var _status_wound: int = 0
 var _status_blind: int = 0
+var _status_invincible: int = 0
 
 func update_status(p_poison: int, p_fire: int, p_sleep: int,
 		p_paralyze: int, p_frozen: int, p_slow: int,
-		p_wound: int, p_blind: int) -> void:
+		p_wound: int, p_blind: int, p_invincible: int = 0) -> void:
 	_status_poison = p_poison
 	_status_fire = p_fire
 	_status_sleep = p_sleep
@@ -104,6 +105,7 @@ func update_status(p_poison: int, p_fire: int, p_sleep: int,
 	_status_slow = p_slow
 	_status_wound = p_wound
 	_status_blind = p_blind
+	_status_invincible = p_invincible
 	queue_redraw()
 
 func update_stats(p_hp: int, p_max_hp: int, p_mp: int, p_max_mp: int,
@@ -516,7 +518,8 @@ func _draw_top_left() -> void:
 	if _status_frozen > 0:   statuses.append({"t": "빙결", "c": Color("#88ddff"), "n": _status_frozen})
 	if _status_slow > 0:     statuses.append({"t": "느림", "c": Color("#aaddff"), "n": _status_slow})
 	if _status_wound > 0:    statuses.append({"t": "부상", "c": Color("#ee4444"), "n": _status_wound})
-	if _status_blind > 0:    statuses.append({"t": "실명", "c": Color("#888888"), "n": _status_blind})
+	if _status_blind > 0:      statuses.append({"t": "실명", "c": Color("#888888"), "n": _status_blind})
+	if _status_invincible > 0: statuses.append({"t": "무적", "c": Color("#ffe066"), "n": _status_invincible})
 	if not statuses.is_empty():
 		hy += 14
 		var sx: float = hx
