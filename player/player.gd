@@ -49,6 +49,12 @@ var equipped_armor: Item  = null
 var poison_turns: int = 0
 var fire_turns: int = 0
 var sleep_turns: int = 0
+var paralyze_turns: int = 0
+var frozen_turns: int = 0
+var slow_turns: int = 0
+var wound_turns: int = 0
+var blind_turns: int = 0
+var _slow_skip: bool = false
 
 var input_blocked := false
 var hud_ref: Node = null
@@ -95,6 +101,12 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	poison_turns = 0
 	fire_turns = 0
 	sleep_turns = 0
+	paralyze_turns = 0
+	frozen_turns = 0
+	slow_turns = 0
+	wound_turns = 0
+	blind_turns = 0
+	_slow_skip = false
 	curse_atk = 0
 	hunger = 0
 	fatigue = 0
@@ -109,11 +121,37 @@ func apply_status(type: String, turns: int) -> void:
 		fire_turns = max(fire_turns, turns) as int
 	elif type == "sleep":
 		sleep_turns = max(sleep_turns, turns) as int
+	elif type == "paralyze":
+		paralyze_turns = max(paralyze_turns, turns) as int
+	elif type == "frozen":
+		frozen_turns = max(frozen_turns, turns) as int
+	elif type == "slow":
+		slow_turns = max(slow_turns, turns) as int
+	elif type == "wound":
+		wound_turns = max(wound_turns, turns) as int
+	elif type == "blind":
+		blind_turns = max(blind_turns, turns) as int
 
 func _unhandled_input(event: InputEvent) -> void:
 	if input_blocked or _acting:
 		return
 	if hud_ref and hud_ref.is_any_popup_open():
+		return
+	if _slow_skip:
+		if (event is InputEventKey and event.pressed) or \
+		   (event is InputEventMouseButton and event.pressed) or \
+		   (event is InputEventScreenTouch and event.pressed):
+			_slow_skip = false
+			slow_turns = max(0, slow_turns - 1)
+			do_wait()
+			get_viewport().set_input_as_handled()
+		return
+	if paralyze_turns > 0:
+		if (event is InputEventKey and event.pressed) or \
+		   (event is InputEventMouseButton and event.pressed) or \
+		   (event is InputEventScreenTouch and event.pressed):
+			do_wait()
+			get_viewport().set_input_as_handled()
 		return
 	if sleep_turns > 0:
 		if (event is InputEventKey and event.pressed) or \
@@ -174,6 +212,11 @@ func _try_move(dir: Vector2i) -> void:
 			_attack_enemy(enemy)
 			# turn_done은 공격 애니 종료 후 _on_action_anim_done에서 발행
 			return
+	if frozen_turns > 0:
+		_update_face_dir(dir)
+		log_message.emit("빙결! 이동할 수 없습니다.")
+		do_wait()
+		return
 	if map_ref and map_ref.get_cell(next.x, next.y) == map_ref.Cell.DOOR:
 		_update_face_dir(dir)
 		door_approached.emit(next)
@@ -381,6 +424,28 @@ func _on_step(consume_hunger: bool = true) -> void:
 		sleep_turns -= 1
 		var suffix := " (%d턴 남음)" % sleep_turns if sleep_turns > 0 else " (해제)"
 		log_message.emit("수면! 행동 불가%s" % suffix)
+	if paralyze_turns > 0:
+		paralyze_turns -= 1
+		var suffix := " (%d턴 남음)" % paralyze_turns if paralyze_turns > 0 else " (해제)"
+		log_message.emit("마비! 행동 불가%s" % suffix)
+	if frozen_turns > 0:
+		frozen_turns -= 1
+		var suffix := " (%d턴 남음)" % frozen_turns if frozen_turns > 0 else " (해제, 느려짐 부여)"
+		log_message.emit("빙결! 이동 불가%s" % suffix)
+		if frozen_turns == 0:
+			slow_turns = max(slow_turns, 1)
+	if slow_turns > 0 and consume_hunger:
+		_slow_skip = true
+		log_message.emit("느려짐 (%d턴 남음)" % slow_turns)
+	if wound_turns > 0:
+		wound_turns -= 1
+		hp = max(0, hp - 1)
+		var suffix := " (%d턴 남음)" % wound_turns if wound_turns > 0 else " (해제)"
+		log_message.emit("부상! HP -1%s" % suffix)
+	if blind_turns > 0:
+		blind_turns -= 1
+		var suffix := " (%d턴 남음)" % blind_turns if blind_turns > 0 else " (해제)"
+		log_message.emit("실명%s" % suffix)
 	if poison_turns > 0:
 		poison_turns -= 1
 		hp = max(0, hp - Item.POISON_DMG_PER_TURN)
