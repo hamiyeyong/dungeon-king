@@ -176,11 +176,14 @@ func _true_name() -> String:
 	return "식량"
 
 func get_reveal_text() -> String:
+	if is_scroll():
+		return "낡은 주문서의 정체가 밝혀졌다! → %s" % get_display_name(true)
 	return "%s 물약은 %s이었다!" % [COLORS[color_idx], _true_name()]
 
-# 독/불/수면은 던질 때 즉시 공개, 주문서도 던질 때 공개
+# 독/불/수면은 던질 때 즉시 공개, 주문서(강화 제외)도 던질 때 공개
 func reveals_on_throw() -> bool:
-	return item_type in [Type.POTION_POISON, Type.POTION_FIRE, Type.POTION_SLEEP] or is_scroll()
+	return item_type in [Type.POTION_POISON, Type.POTION_FIRE, Type.POTION_SLEEP] \
+		or item_type in [Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY]
 
 func get_stat_label() -> String:
 	if not is_equipment() or not EQUIPMENT_DATA.has(item_type):

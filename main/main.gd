@@ -15,7 +15,7 @@ const STATUS_EFFECT_SCENE := preload("res://fx/status_effect.tscn")
 
 # 물약 색상-효과 매핑 (런마다 셔플)
 var _potion_map: Array[Item.Type] = []
-var _identified: Array[bool] = [false, false, false, false, false, false]
+var _identified: Array[bool] = [false, false, false, false, false, false, false, false, false]
 
 # 던지기 타겟팅
 var _throw_mode := false
@@ -41,7 +41,7 @@ func _init_run() -> void:
 		Item.Type.POTION_SLEEP,
 	])
 	_potion_map.shuffle()
-	_identified.assign([false, false, false, false, false, false])
+	_identified.assign([false, false, false, false, false, false, false, false, false])
 	floor_items.clear()
 
 	map.generate()
@@ -233,7 +233,13 @@ func _pick_bush_drop() -> Item:
 		mat.item_type = _potion_map[cidx]
 		mat.color_idx = cidx
 	else:
-		mat.item_type = Item.Type.SCROLL_ENHANCE
+		var sroll: int = randi() % 4
+		if sroll == 0:
+			mat.item_type = Item.Type.SCROLL_ENHANCE
+		else:
+			var sidx: int = sroll - 1  # 0=BASH, 1=TELEPORT, 2=IDENTIFY
+			mat.item_type = Item.SCROLL_TYPES[sidx]
+			mat.color_idx = 6 + sidx   # _identified[6/7/8]
 	return mat
 
 func _resolve_jar(tile_pos: Vector2i) -> void:
@@ -406,7 +412,7 @@ func _chest_give_slot_b() -> void:
 		hud.add_log("인벤토리가 가득 차 장비/재료를 받을 수 없습니다.")
 		return
 	var item := Item.new()
-	var roll: int = randi() % 10
+	var roll: int = randi() % 12
 	if roll < 4:
 		# 장비
 		var equip_types: Array = [
@@ -419,6 +425,11 @@ func _chest_give_slot_b() -> void:
 		if Item.EQUIPMENT_DATA.has(etype):
 			item.durability = Item.EQUIPMENT_DATA[etype][3]
 			item.max_durability = item.durability
+	elif roll < 6:
+		# 주문서
+		var sidx: int = randi() % 3
+		item.item_type = Item.SCROLL_TYPES[sidx]
+		item.color_idx = 6 + sidx
 	else:
 		# 재료
 		var mat_types: Array = [
@@ -428,7 +439,8 @@ func _chest_give_slot_b() -> void:
 		]
 		item.item_type = mat_types[randi() % mat_types.size()]
 	player.inventory.append(item)
-	hud.add_log(item.get_display_name(true) + " 획득! (상자 B)")
+	var b_ident: bool = not item.is_scroll() or _identified[item.color_idx]
+	hud.add_log(item.get_display_name(b_ident) + " 획득! (상자 B)")
 
 func _drop_item(item: Item, pos: Vector2i) -> void:
 	floor_items.append({"pos": pos, "item": item})
@@ -513,6 +525,27 @@ func _trigger_trap(pos: Vector2i) -> void:
 	if player.hp <= 0:
 		_trigger_game_over()
 
+func _apply_scroll(sidx: int) -> void:
+	match sidx:
+		0:  # SCROLL_BASH
+			player.next_atk_multiplier = 3
+			hud.add_log("강타 주문서! 다음 공격 3배 데미지!")
+		1:  # SCROLL_TELEPORT
+			var floor_tiles: Array[Vector2i] = []
+			for fy in map.HEIGHT:
+				for fx in map.WIDTH:
+					if map.is_walkable(fx, fy) and map.get_cell(fx, fy) == map.Cell.FLOOR:
+						floor_tiles.append(Vector2i(fx, fy))
+			if not floor_tiles.is_empty():
+				floor_tiles.shuffle()
+				player.tile_pos = floor_tiles[0]
+				player.position = map.tile_to_world(player.tile_pos)
+				_update_fov()
+			hud.add_log("순간이동 주문서! 랜덤 위치로 이동했습니다.")
+		2:  # SCROLL_IDENTIFY
+			_identified.fill(true)
+			hud.add_log("식별 주문서! 모든 아이템이 식별되었습니다.")
+
 func _try_enhance() -> String:
 	var target: Item = player.equipped_weapon
 	if target == null:
@@ -589,6 +622,23 @@ func _on_item_action(idx: int, action: String) -> void:
 				hud.close_inventory()
 				_refresh_hud()
 				return
+			if item.is_scroll():
+				var sidx: int = item.color_idx - 6
+				if sidx < 0 or sidx > 2:
+					hud.add_log("알 수 없는 주문서입니다.")
+					hud.close_inventory()
+					return
+				var was_identified: bool = _identified[item.color_idx]
+				_identified[item.color_idx] = true
+				if not was_identified:
+					hud.add_log("낡은 주문서의 정체가 밝혀졌다! → %s" % item.get_display_name(true))
+					_run_explore_xp += 50
+				_apply_scroll(sidx)
+				player.inventory.remove_at(idx)
+				hud.close_inventory()
+				_refresh_hud()
+				enemy_manager.do_turns(player.tile_pos)
+				return
 			if item.item_type != Item.Type.FOOD and item.item_type != Item.Type.COOKED_FOOD:
 				var was_identified: bool = _identified[item.color_idx]
 				_identified[item.color_idx] = true
@@ -601,6 +651,12 @@ func _on_item_action(idx: int, action: String) -> void:
 				match item.item_type:
 					Item.Type.POTION_POISON: _spawn_poison(player.position)
 					Item.Type.POTION_FIRE:   _spawn_fire(player.position)
+				# 포션 사용 후 빈병 획득
+				if player.inventory.size() < player.MAX_INVENTORY - 1:
+					var bottle := Item.new()
+					bottle.item_type = Item.Type.MATERIAL_BOTTLE
+					player.inventory.append(bottle)
+					hud.add_log("빈병을 얻었습니다.")
 			else:
 				hud.add_log(item.apply(player))
 		"discard":
