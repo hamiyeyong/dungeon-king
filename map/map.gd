@@ -6,9 +6,22 @@ const HEIGHT := 30
 const TILE_SIZE := 32
 const ATLAS_TILE := 64  # 타일셋 원본 타일 크기
 
-enum Cell { WALL, FLOOR, STAIRS, CHEST, CHEST_OPEN, CAMPFIRE, CAMPFIRE_OUT, TRAP, GRASS, JAR, JAR_OPEN }
+enum Cell {
+	WALL, FLOOR, STAIRS, CHEST, CHEST_OPEN,
+	CAMPFIRE, CAMPFIRE_OUT, TRAP, GRASS, JAR, JAR_OPEN,
+	DOOR, DOOR_OPEN,
+	WHITE_CAULDRON, BLACK_CAULDRON, MAGIC_WELL,
+	MERCHANT,
+}
 
 # 타일셋 atlas 좌표 (col, row) — tiles-64.png 기준
+const TILE_DOOR          := Vector2i(3, 4)
+const TILE_DOOR_OPEN     := Vector2i(4, 4)
+const TILE_CAULDRON_W    := Vector2i(5, 4)
+const TILE_CAULDRON_B    := Vector2i(6, 4)
+const TILE_WELL          := Vector2i(7, 4)
+const TILE_MERCHANT      := Vector2i(0, 5)
+
 const TILE_WALL_VARIANTS := [
 	Vector2i(1, 11),
 ]
@@ -142,12 +155,29 @@ func _place_objects() -> void:
 		return
 	var last: Vector2i = rooms.back().get_center()
 	grid[last.y][last.x] = Cell.STAIRS
+
+	# 중간 방들에 오브젝트 배치 (첫 방 제외)
+	var cauldron_placed := false
+	var well_placed := false
 	for i in range(1, rooms.size() - 1):
 		var c: Vector2i = rooms[i].get_center()
-		match randi() % 3:
-			0: grid[c.y][c.x] = Cell.CHEST
-			1: grid[c.y][c.x] = Cell.CAMPFIRE
-			2: grid[c.y][c.x] = Cell.TRAP
+		if not cauldron_placed and i == 1:
+			# 첫 번째 중간 방: 연금술 솥
+			grid[c.y][c.x] = Cell.WHITE_CAULDRON if randi() % 2 == 0 else Cell.BLACK_CAULDRON
+			cauldron_placed = true
+		elif not well_placed and randi() % 4 == 0:
+			# 25% 확률로 이상한 우물
+			grid[c.y][c.x] = Cell.MAGIC_WELL
+			well_placed = true
+		else:
+			match randi() % 3:
+				0: grid[c.y][c.x] = Cell.CHEST
+				1: grid[c.y][c.x] = Cell.CAMPFIRE
+				2: grid[c.y][c.x] = Cell.TRAP
+
+	# 문: 방과 방 사이 복도 입구 (각 방 가장자리)에 배치
+	_place_doors()
+
 	# 수풀: 바닥 타일의 약 2.5% 배치
 	for y in range(1, HEIGHT - 1):
 		for x in range(1, WIDTH - 1):
@@ -158,6 +188,30 @@ func _place_objects() -> void:
 		for x in range(1, WIDTH - 1):
 			if grid[y][x] == Cell.FLOOR and randi() % 50 == 0:
 				grid[y][x] = Cell.JAR
+
+func _place_doors() -> void:
+	# 각 방의 경계 바닥 타일 중 일부에 문 배치
+	for i in range(1, rooms.size()):
+		if randi() % 2 == 0:
+			continue   # 50% 확률로만 문 생성
+		var room: Rect2i = rooms[i]
+		# 방 경계의 바닥 타일 수집
+		var border_tiles: Array[Vector2i] = []
+		for x in range(room.position.x, room.end.x):
+			for edge_y in [room.position.y, room.end.y - 1]:
+				var v := Vector2i(x, edge_y)
+				if grid[v.y][v.x] == Cell.FLOOR:
+					border_tiles.append(v)
+		for y in range(room.position.y, room.end.y):
+			for edge_x in [room.position.x, room.end.x - 1]:
+				var v := Vector2i(edge_x, y)
+				if grid[v.y][v.x] == Cell.FLOOR:
+					border_tiles.append(v)
+		if border_tiles.is_empty():
+			continue
+		border_tiles.shuffle()
+		# 방마다 문 1개 배치
+		grid[border_tiles[0].y][border_tiles[0].x] = Cell.DOOR
 
 func _draw() -> void:
 	var has_fov := not fov_visible.is_empty()
@@ -187,9 +241,20 @@ func _draw() -> void:
 						var shard_idx: int = (tile_variant_grid[y][x] / 3) % 3
 						draw_texture_rect(JAR_SHARDS[pot_idx][shard_idx], dest, false)
 					elif cell == Cell.CAMPFIRE_OUT:
-						# 꺼진 모닥불 — 같은 타일을 회색으로 어둡게 표시
 						var src := Rect2(TILE_CAMPFIRE.x * ATLAS_TILE, TILE_CAMPFIRE.y * ATLAS_TILE, ATLAS_TILE, ATLAS_TILE)
 						draw_texture_rect_region(TILESET, dest, src, Color(0.3, 0.3, 0.4, 1.0))
+					elif cell == Cell.DOOR:
+						_blit_tinted(dest, TILE_DOOR, Color(0.7, 0.5, 0.3))
+					elif cell == Cell.DOOR_OPEN:
+						_blit_tinted(dest, TILE_DOOR_OPEN, Color(0.8, 0.7, 0.5))
+					elif cell == Cell.WHITE_CAULDRON:
+						_blit_tinted(dest, TILE_CAULDRON_W, Color(0.9, 0.95, 1.0))
+					elif cell == Cell.BLACK_CAULDRON:
+						_blit_tinted(dest, TILE_CAULDRON_B, Color(0.4, 0.3, 0.5))
+					elif cell == Cell.MAGIC_WELL:
+						_blit_tinted(dest, TILE_WELL, Color(0.5, 0.8, 1.0))
+					elif cell == Cell.MERCHANT:
+						_draw_merchant_marker(dest)
 					else:
 						_blit(dest, _cell_atlas(cell))
 			if has_fov:
@@ -240,13 +305,31 @@ func _blit(dest: Rect2, atlas: Vector2i) -> void:
 	var src := Rect2(atlas.x * ATLAS_TILE, atlas.y * ATLAS_TILE, ATLAS_TILE, ATLAS_TILE)
 	draw_texture_rect_region(TILESET, dest, src)
 
+func _blit_tinted(dest: Rect2, atlas: Vector2i, tint: Color) -> void:
+	var src := Rect2(atlas.x * ATLAS_TILE, atlas.y * ATLAS_TILE, ATLAS_TILE, ATLAS_TILE)
+	draw_texture_rect_region(TILESET, dest, src, tint)
+
+func _draw_merchant_marker(dest: Rect2) -> void:
+	var cx: float = dest.position.x + dest.size.x * 0.5
+	var cy: float = dest.position.y + dest.size.y * 0.5
+	draw_circle(Vector2(cx, cy), 10.0, Color(0.9, 0.75, 0.2, 0.85))
+	var font := ThemeDB.fallback_font
+	draw_string(font, Vector2(dest.position.x, cy + 5),
+		"$", HORIZONTAL_ALIGNMENT_CENTER, dest.size.x, 13, Color(0.1, 0.1, 0.1))
+
 func _cell_atlas(cell: int) -> Vector2i:
 	match cell:
-		Cell.CHEST:      return TILE_CHEST
-		Cell.CHEST_OPEN: return TILE_CHEST_OPEN
-		Cell.CAMPFIRE:     return TILE_CAMPFIRE
-		Cell.CAMPFIRE_OUT: return TILE_CAMPFIRE
-		Cell.TRAP:       return TILE_TRAP
+		Cell.CHEST:          return TILE_CHEST
+		Cell.CHEST_OPEN:     return TILE_CHEST_OPEN
+		Cell.CAMPFIRE:       return TILE_CAMPFIRE
+		Cell.CAMPFIRE_OUT:   return TILE_CAMPFIRE
+		Cell.TRAP:           return TILE_TRAP
+		Cell.DOOR:           return TILE_DOOR
+		Cell.DOOR_OPEN:      return TILE_DOOR_OPEN
+		Cell.WHITE_CAULDRON: return TILE_CAULDRON_W
+		Cell.BLACK_CAULDRON: return TILE_CAULDRON_B
+		Cell.MAGIC_WELL:     return TILE_WELL
+		Cell.MERCHANT:       return TILE_MERCHANT
 	return TILE_FLOOR
 
 func update_fov(player_pos: Vector2i, radius: int, light_sources: Array[Vector2i] = []) -> void:
@@ -332,7 +415,24 @@ func is_walkable(x: int, y: int) -> bool:
 	if x < 0 or x >= WIDTH or y < 0 or y >= HEIGHT:
 		return false
 	var cell: int = grid[y][x]
-	return cell != Cell.WALL and cell != Cell.CAMPFIRE and cell != Cell.CAMPFIRE_OUT and cell != Cell.GRASS and cell != Cell.JAR
+	return cell not in [
+		Cell.WALL, Cell.CAMPFIRE, Cell.CAMPFIRE_OUT,
+		Cell.GRASS, Cell.JAR, Cell.DOOR,
+		Cell.WHITE_CAULDRON, Cell.BLACK_CAULDRON, Cell.MAGIC_WELL, Cell.MERCHANT,
+	]
+
+func is_door(x: int, y: int) -> bool:
+	return get_cell(x, y) == Cell.DOOR
+
+func is_cauldron(x: int, y: int) -> bool:
+	var c: int = get_cell(x, y)
+	return c == Cell.WHITE_CAULDRON or c == Cell.BLACK_CAULDRON
+
+func is_well(x: int, y: int) -> bool:
+	return get_cell(x, y) == Cell.MAGIC_WELL
+
+func is_merchant(x: int, y: int) -> bool:
+	return get_cell(x, y) == Cell.MERCHANT
 
 func is_grass(x: int, y: int) -> bool:
 	return get_cell(x, y) == Cell.GRASS

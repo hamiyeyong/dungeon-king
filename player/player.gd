@@ -32,6 +32,8 @@ var def_ := 1
 var curse_atk: int = 0
 var exp := 0
 var level := 1
+var gold: int = 0
+var next_atk_multiplier: int = 1   # 강타 주문서 효과 (사용 후 다음 공격 배수)
 
 var inventory: Array[Item] = []
 const MAX_INVENTORY := 10
@@ -93,6 +95,8 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	hunger = 0
 	fatigue = 0
 	mp = max_mp
+	gold = 0
+	next_atk_multiplier = 1
 
 func apply_status(type: String, turns: int) -> void:
 	if type == "poison":
@@ -205,9 +209,14 @@ func _attack_enemy(enemy) -> void:
 	_on_weapon_used()
 	fatigue = min(600, fatigue + 3)
 	if fatigue >= 600:
-		hp = max(0, hp - 1)
-		log_message.emit("탈진 상태! 체력이 줄어들고 있습니다!")
-	var dmg: int = enemy.take_damage(atk)
+		max_hp = max(5, max_hp - 1)
+		hp = min(hp, max_hp)
+		log_message.emit("탈진 상태! 최대 체력이 줄어들고 있습니다!")
+	var effective_atk: int = atk * next_atk_multiplier
+	if next_atk_multiplier > 1:
+		log_message.emit("강타! %d배 데미지!" % next_atk_multiplier)
+		next_atk_multiplier = 1
+	var dmg: int = enemy.take_damage(effective_atk)
 	log_message.emit("%s에게 %d 피해!" % [enemy.display_name, dmg])
 	if enemy.is_dead():
 		var reward: int = 5 * floor_num
