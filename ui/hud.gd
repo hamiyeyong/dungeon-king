@@ -26,6 +26,8 @@ signal throw_cancelled
 signal craft_recipe_selected(recipe_idx: int)
 signal campfire_action(action: String)       # "camp" | "cook" | "cancel"
 signal campfire_cook_selected(item_idx: int) # 선택한 식량의 인벤 인덱스
+signal merchant_buy(shop_idx: int)
+signal merchant_sell(inv_idx: int)
 
 var hp := 20
 var max_hp := 20
@@ -70,6 +72,11 @@ var _craft_visible := false
 var _campfire_popup_visible := false
 var _cook_popup_visible := false
 var _cook_popup_indices: Array[int] = []
+
+var _merchant_visible := false
+var _merchant_sell_mode := false
+var _merchant_shop_items: Array[Dictionary] = []   # {item, price, sold}
+var _merchant_sell_prices: Array[int] = []
 
 var gold: int = 0
 
@@ -133,10 +140,26 @@ func close_inventory() -> void:
 func is_any_popup_open() -> bool:
 	return _popup_visible or _bag_visible or _action_popup_visible or \
 		_equip_action_visible or _craft_visible or \
-		_campfire_popup_visible or _cook_popup_visible
+		_campfire_popup_visible or _cook_popup_visible or _merchant_visible
 
 func set_throw_mode(active: bool) -> void:
 	_throw_mode = active
+	queue_redraw()
+
+func show_merchant_popup(shop_items: Array[Dictionary], sell_prices: Array[int]) -> void:
+	_merchant_visible = true
+	_merchant_sell_mode = false
+	_merchant_shop_items = shop_items
+	_merchant_sell_prices = sell_prices
+	queue_redraw()
+
+func update_merchant_data(shop_items: Array[Dictionary], sell_prices: Array[int]) -> void:
+	_merchant_shop_items = shop_items
+	_merchant_sell_prices = sell_prices
+	queue_redraw()
+
+func close_merchant_popup() -> void:
+	_merchant_visible = false
 	queue_redraw()
 
 func show_campfire_popup() -> void:
@@ -199,6 +222,38 @@ func _input(event: InputEvent) -> void:
 					return
 		_cook_popup_visible = false
 		queue_redraw()
+		get_viewport().set_input_as_handled()
+		return
+
+	if _merchant_visible:
+		var mp := _merchant_panel_rect()
+		if _merchant_close_btn_rect(mp).has_point(p):
+			_merchant_visible = false
+			queue_redraw()
+			get_viewport().set_input_as_handled()
+			return
+		if _merchant_toggle_btn_rect(mp).has_point(p):
+			_merchant_sell_mode = not _merchant_sell_mode
+			queue_redraw()
+			get_viewport().set_input_as_handled()
+			return
+		if _merchant_sell_mode:
+			for i in _inventory_items.size():
+				if _merchant_row_rect(mp, i).has_point(p):
+					var act_btn := _merchant_action_btn_rect(mp, i)
+					if act_btn.has_point(p):
+						merchant_sell.emit(i)
+					get_viewport().set_input_as_handled()
+					return
+		else:
+			for i in _merchant_shop_items.size():
+				if _merchant_row_rect(mp, i).has_point(p):
+					var act_btn := _merchant_action_btn_rect(mp, i)
+					var d: Dictionary = _merchant_shop_items[i]
+					if act_btn.has_point(p) and not d.sold:
+						merchant_buy.emit(i)
+					get_viewport().set_input_as_handled()
+					return
 		get_viewport().set_input_as_handled()
 		return
 
@@ -343,6 +398,8 @@ func _draw() -> void:
 		_draw_equip_action_popup()
 	if _action_popup_visible:
 		_draw_action_popup()
+	if _merchant_visible:
+		_draw_merchant_popup()
 	if _campfire_popup_visible:
 		_draw_campfire_popup()
 	if _cook_popup_visible:
@@ -851,3 +908,110 @@ func _can_craft(recipe_idx: int) -> bool:
 		if _count_mat(mat[0]) < mat[1]:
 			return false
 	return true
+
+# ── Merchant Popup ─────────────────────────────────────────────────────────
+
+func _merchant_panel_rect() -> Rect2:
+	var pw := 480.0; var ph := 370.0
+	return Rect2((W - pw) * 0.5, (H - ph) * 0.5, pw, ph)
+
+func _merchant_row_rect(pr: Rect2, i: int) -> Rect2:
+	return Rect2(pr.position.x + 8, pr.position.y + 44 + i * 32, pr.size.x - 16, 30)
+
+func _merchant_action_btn_rect(pr: Rect2, i: int) -> Rect2:
+	var row := _merchant_row_rect(pr, i)
+	return Rect2(row.end.x - 66, row.position.y + 3, 62, 24)
+
+func _merchant_close_btn_rect(pr: Rect2) -> Rect2:
+	return Rect2(pr.end.x - 82, pr.end.y - 36, 76, 28)
+
+func _merchant_toggle_btn_rect(pr: Rect2) -> Rect2:
+	return Rect2(pr.position.x + 8, pr.end.y - 36, 110, 28)
+
+func _draw_merchant_popup() -> void:
+	var font := ThemeDB.fallback_font
+	var pr := _merchant_panel_rect()
+	draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.45))
+	draw_rect(pr, Color(0.06, 0.08, 0.12, 0.97))
+	draw_rect(pr, Color(0.6, 0.5, 0.25, 0.9), false)
+
+	# Header
+	var title := "상인 상점" if not _merchant_sell_mode else "아이템 판매"
+	draw_string(font, Vector2(pr.position.x, pr.position.y + 24),
+		title, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 14, Color("#f0d060"))
+	draw_string(font, Vector2(pr.end.x - 100, pr.position.y + 16),
+		"💰 %dG" % gold, HORIZONTAL_ALIGNMENT_LEFT, 100, 11, Color("#f0d060"))
+
+	var item_list: Array
+	if _merchant_sell_mode:
+		item_list = _inventory_items
+	else:
+		item_list = _merchant_shop_items
+
+	var max_rows: int = min(item_list.size(), 9)
+	for i in max_rows:
+		var row := _merchant_row_rect(pr, i)
+		draw_rect(row, Color(0.1, 0.12, 0.18, 0.8))
+
+		var item: Item
+		var price_text: String
+		var sold: bool = false
+		if _merchant_sell_mode:
+			item = _inventory_items[i]
+			var sp: int = _merchant_sell_prices[i] if i < _merchant_sell_prices.size() else 1
+			price_text = "%dG" % sp
+		else:
+			var d: Dictionary = _merchant_shop_items[i]
+			item = d.item
+			price_text = "%dG" % d.price
+			sold = d.sold
+
+		# 아이템 아이콘
+		var atlas: Vector2i = item.get_atlas()
+		var src := Rect2(atlas.x * ATLAS_TILE, atlas.y * ATLAS_TILE, ATLAS_TILE, ATLAS_TILE)
+		var icon_rect := Rect2(row.position.x + 2, row.position.y + 3, 22, 22)
+		draw_texture_rect_region(TILESET, icon_rect, src, item.get_modulate())
+
+		# 아이템 이름
+		var identified: bool = item.color_idx < _inventory_identified.size() \
+			and _inventory_identified[item.color_idx]
+		var name_str := item.get_display_name(identified)
+		var name_color := Color(0.45, 0.45, 0.5) if sold else Color(0.9, 0.9, 0.9)
+		draw_string(font, Vector2(row.position.x + 28, row.position.y + 18),
+			name_str, HORIZONTAL_ALIGNMENT_LEFT, 240, 10, name_color)
+
+		# 가격
+		draw_string(font, Vector2(row.end.x - 130, row.position.y + 18),
+			price_text, HORIZONTAL_ALIGNMENT_LEFT, 60, 10, Color("#f0d060"))
+
+		# 버튼
+		var btn := _merchant_action_btn_rect(pr, i)
+		var btn_label: String
+		var btn_color: Color
+		if _merchant_sell_mode:
+			btn_label = "판매"
+			btn_color = Color(0.38, 0.18, 0.08, 0.95)
+		elif sold:
+			btn_label = "품절"
+			btn_color = Color(0.2, 0.2, 0.22, 0.8)
+		else:
+			btn_label = "구매"
+			btn_color = Color(0.12, 0.32, 0.12, 0.95)
+		draw_rect(btn, btn_color)
+		draw_rect(btn, Color(0.5, 0.5, 0.5, 0.5), false)
+		draw_string(font, Vector2(btn.position.x, btn.position.y + btn.size.y * 0.5 + 5),
+			btn_label, HORIZONTAL_ALIGNMENT_CENTER, btn.size.x, 10, Color.WHITE)
+
+	# 하단 버튼
+	var toggle_btn := _merchant_toggle_btn_rect(pr)
+	draw_rect(toggle_btn, Color(0.15, 0.2, 0.3, 0.9))
+	draw_rect(toggle_btn, Color(0.5, 0.6, 0.7, 0.7), false)
+	var toggle_label := "▶ 판매하기" if not _merchant_sell_mode else "◀ 구매하기"
+	draw_string(font, Vector2(toggle_btn.position.x, toggle_btn.position.y + toggle_btn.size.y * 0.5 + 5),
+		toggle_label, HORIZONTAL_ALIGNMENT_CENTER, toggle_btn.size.x, 10, Color.WHITE)
+
+	var close_btn := _merchant_close_btn_rect(pr)
+	draw_rect(close_btn, Color(0.28, 0.08, 0.08, 0.9))
+	draw_rect(close_btn, Color(0.6, 0.3, 0.3, 0.7), false)
+	draw_string(font, Vector2(close_btn.position.x, close_btn.position.y + close_btn.size.y * 0.5 + 5),
+		"닫기", HORIZONTAL_ALIGNMENT_CENTER, close_btn.size.x, 10, Color.WHITE)
