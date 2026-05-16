@@ -119,6 +119,14 @@ func _init_run() -> void:
 		player.well_approached.connect(_on_well_approached)
 	if not hud.well_item_selected.is_connected(_on_well_item_selected):
 		hud.well_item_selected.connect(_on_well_item_selected)
+	if not player.skull_approached.is_connected(_on_skull_approached):
+		player.skull_approached.connect(_on_skull_approached)
+	if not player.tablet_approached.is_connected(_on_tablet_approached):
+		player.tablet_approached.connect(_on_tablet_approached)
+	if not player.statue_approached.is_connected(_on_statue_approached):
+		player.statue_approached.connect(_on_statue_approached)
+	if not player.bookshelf_approached.is_connected(_on_bookshelf_approached):
+		player.bookshelf_approached.connect(_on_bookshelf_approached)
 
 	# 탐험경험치 마일스톤 보너스 적용
 	_run_explore_xp = 0
@@ -204,6 +212,12 @@ func _on_player_turn_done() -> void:
 
 	if cell == map.Cell.TRAP:
 		_trigger_trap(player.tile_pos)
+
+	if cell == map.Cell.TAINTED_SPRING or cell == map.Cell.CLEAR_SPRING:
+		_trigger_spring(player.tile_pos, cell)
+
+	if cell == map.Cell.ALTAR or cell == map.Cell.ALTAR_BIG:
+		_trigger_altar(player.tile_pos, cell)
 
 	if cell == map.Cell.STAIRS:
 		_show_stairs_popup()
@@ -1273,6 +1287,186 @@ func _create_well_transform(original: Item) -> Item:
 		result.item_type = _potion_map[cidx]
 		result.color_idx = cidx
 	return result
+
+# ── 샘 상호작용 ────────────────────────────────────────────────────────────
+
+func _trigger_spring(pos: Vector2i, cell: int) -> void:
+	map.set_cell(pos.x, pos.y, map.Cell.FLOOR)
+	if cell == map.Cell.TAINTED_SPRING:
+		if randi() % 2 == 0:
+			var heal: int = randi() % 6 + 5
+			player.hp = min(player.max_hp, player.hp + heal)
+			hud.add_log("오염된 샘! HP +%d 회복" % heal)
+		else:
+			player.apply_status("poison", Item.POISON_TURNS)
+			hud.add_log("오염된 샘! 독에 오염되었습니다!")
+	else:  # CLEAR_SPRING
+		var heal: int = randi() % 11 + 10
+		player.hp = min(player.max_hp, player.hp + heal)
+		player.mp = min(player.max_mp, player.mp + 10)
+		player.hunger = max(0, player.hunger - 250)
+		player.fatigue = max(0, player.fatigue - 250)
+		player.poison_turns = 0
+		player.fire_turns = 0
+		player.sleep_turns = 0
+		player.paralyze_turns = 0
+		player.wound_turns = 0
+		hud.add_log("맑은 샘! HP +%d, MP +10, 상태이상 해제, 허기·피로 감소" % heal)
+	_refresh_hud()
+	if player.hp <= 0:
+		_trigger_game_over()
+
+# ── 제단 상호작용 ────────────────────────────────────────────────────────────
+
+func _trigger_altar(pos: Vector2i, cell: int) -> void:
+	map.set_cell(pos.x, pos.y, map.Cell.FLOOR)
+	if player.inventory.size() >= player.MAX_INVENTORY:
+		hud.add_log("인벤토리가 가득 차 제단 아이템을 가져올 수 없습니다.")
+		return
+	var item := Item.new()
+	if cell == map.Cell.ALTAR_BIG:
+		# 큰 제단: 더 좋은 아이템 (장비 위주)
+		var types: Array = [
+			Item.Type.WEAPON_IRON, Item.Type.SHIELD_IRON,
+			Item.Type.ARMOR_LEATHER, Item.Type.SCROLL_ENHANCE,
+		]
+		var t: int = types[randi() % types.size()]
+		item.item_type = t
+		if Item.EQUIPMENT_DATA.has(t):
+			item.durability = Item.EQUIPMENT_DATA[t][3]
+			item.max_durability = item.durability
+		item.enhance_level = 1
+	else:
+		# 일반 제단: 장비 or 주문서
+		if randi() % 2 == 0:
+			var equips: Array = [Item.Type.WEAPON_STONE, Item.Type.WEAPON_IRON,
+				Item.Type.SHIELD_WOOD, Item.Type.SHIELD_IRON, Item.Type.ARMOR_CLOTH]
+			var t: int = equips[randi() % equips.size()]
+			item.item_type = t
+			if Item.EQUIPMENT_DATA.has(t):
+				item.durability = Item.EQUIPMENT_DATA[t][3]
+				item.max_durability = item.durability
+		else:
+			var sidx: int = randi() % 3
+			item.item_type = Item.SCROLL_TYPES[sidx]
+			item.color_idx = 6 + sidx
+	player.inventory.append(item)
+	var label := "대제단" if cell == map.Cell.ALTAR_BIG else "제단"
+	hud.add_log("%s에서 %s 획득!" % [label, item.get_display_name(true)])
+	_refresh_hud()
+
+# ── 해골더미 상호작용 ────────────────────────────────────────────────────────
+
+func _on_skull_approached(tile_pos: Vector2i) -> void:
+	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
+	if player.inventory.size() >= player.MAX_INVENTORY:
+		hud.add_log("인벤토리가 가득 차 해골더미를 뒤질 수 없습니다.")
+	else:
+		var item := Item.new()
+		match randi() % 3:
+			0:  # 장비
+				var equips: Array = [Item.Type.WEAPON_WOOD, Item.Type.WEAPON_STONE,
+					Item.Type.SHIELD_WOOD, Item.Type.ARMOR_CLOTH]
+				var t: int = equips[randi() % equips.size()]
+				item.item_type = t
+				if Item.EQUIPMENT_DATA.has(t):
+					item.durability = Item.EQUIPMENT_DATA[t][3]
+					item.max_durability = item.durability
+			1:  # 재료
+				var mats: Array = [Item.Type.MATERIAL_BRANCH, Item.Type.MATERIAL_STONE,
+					Item.Type.MATERIAL_CLOTH, Item.Type.MATERIAL_ORE]
+				item.item_type = mats[randi() % mats.size()]
+			2:  # 물약
+				var cidx: int = randi() % 6
+				item.item_type = _potion_map[cidx]
+				item.color_idx = cidx
+		player.inventory.append(item)
+		hud.add_log("해골더미에서 %s 발견!" % item.get_display_name(_identified.get(item.color_idx, false)))
+	_refresh_hud()
+	enemy_manager.do_turns(player.tile_pos)
+
+# ── 지식의 석판 상호작용 ──────────────────────────────────────────────────────
+
+func _on_tablet_approached(tile_pos: Vector2i) -> void:
+	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
+	var unidentified: Array[int] = []
+	for item in player.inventory:
+		if item.color_idx >= 0 and item.color_idx < _identified.size() and not _identified[item.color_idx]:
+			if item.color_idx not in unidentified:
+				unidentified.append(item.color_idx)
+	if unidentified.is_empty():
+		hud.add_log("지식의 석판: 식별할 미확인 아이템이 없습니다.")
+	else:
+		var cidx: int = unidentified[randi() % unidentified.size()]
+		_identified[cidx] = true
+		hud.add_log("지식의 석판이 빛났다! 아이템이 식별되었습니다.")
+	_refresh_hud()
+	enemy_manager.do_turns(player.tile_pos)
+
+# ── 석상 상호작용 ──────────────────────────────────────────────────────────
+
+func _on_statue_approached(tile_pos: Vector2i, statue_type: String) -> void:
+	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
+	match statue_type:
+		"warrior":
+			if player.equipped_weapon:
+				player.equipped_weapon.enhance_level = min(
+					MAX_ENHANCE, player.equipped_weapon.enhance_level + 1)
+				player._recalc_equip_stats()
+				hud.add_log("전사의 석상! 무기가 +%d로 강화되었습니다." % player.equipped_weapon.enhance_level)
+			elif player.equipped_armor:
+				player.equipped_armor.enhance_level = min(
+					MAX_ENHANCE, player.equipped_armor.enhance_level + 1)
+				player._recalc_equip_stats()
+				hud.add_log("전사의 석상! 갑옷이 +%d로 강화되었습니다." % player.equipped_armor.enhance_level)
+			else:
+				hud.add_log("전사의 석상: 강화할 장착 장비가 없습니다.")
+		"wizard":
+			player.mp = min(player.max_mp, player.mp + 15)
+			player.max_mp += 5
+			hud.add_log("마법사의 석상! 최대 MP +5, MP +15 회복")
+		"angel":
+			var roll: int = randi() % 6
+			match roll:
+				0:
+					var heal: int = randi() % 10 + 10
+					player.hp = min(player.max_hp, player.hp + heal)
+					hud.add_log("천사 석상의 가호! HP +%d" % heal)
+				1:
+					player.mp = min(player.max_mp, player.mp + 20)
+					hud.add_log("천사 석상의 가호! MP +20")
+				2:
+					player.fatigue = max(0, player.fatigue - 300)
+					hud.add_log("천사 석상의 가호! 피로도 -300")
+				3:
+					player.max_hp += 3
+					player.hp = min(player.hp + 3, player.max_hp)
+					hud.add_log("천사 석상의 가호! 최대 HP +3")
+				4:
+					hud.add_log("천사 석상이 조용히 빛났지만... 아무 일도 없었습니다.")
+				5:
+					player.apply_status("paralyze", 2)
+					hud.add_log("천사 석상의 저주! 마비 2턴")
+	_refresh_hud()
+	enemy_manager.do_turns(player.tile_pos)
+
+# ── 책장 상호작용 ──────────────────────────────────────────────────────────
+
+func _on_bookshelf_approached(tile_pos: Vector2i) -> void:
+	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
+	# 미식별 주문서/포션 중 1종 랜덤 식별
+	var unidentified: Array[int] = []
+	for i in _identified.size():
+		if not _identified[i]:
+			unidentified.append(i)
+	if unidentified.is_empty():
+		hud.add_log("책장: 모든 아이템이 이미 식별되어 있습니다.")
+	else:
+		var cidx: int = unidentified[randi() % unidentified.size()]
+		_identified[cidx] = true
+		hud.add_log("책장에서 지식을 얻었다! 아이템 1종이 식별되었습니다.")
+	_refresh_hud()
+	enemy_manager.do_turns(player.tile_pos)
 
 func _on_home_requested() -> void:
 	get_tree().call_deferred("change_scene_to_file", "res://home/home.tscn")

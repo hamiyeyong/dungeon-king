@@ -12,6 +12,10 @@ signal merchant_approached(tile_pos: Vector2i)
 signal door_approached(tile_pos: Vector2i)
 signal cauldron_approached(tile_pos: Vector2i)
 signal well_approached(tile_pos: Vector2i)
+signal skull_approached(tile_pos: Vector2i)
+signal tablet_approached(tile_pos: Vector2i)
+signal statue_approached(tile_pos: Vector2i, statue_type: String)
+signal bookshelf_approached(tile_pos: Vector2i)
 
 const TILE_SIZE := 32
 const KNIGHT_PATH  = "res://assets/sprites/doodle-rpg/ALL SPRITES/Knight/Walking/"
@@ -241,6 +245,25 @@ func _try_move(dir: Vector2i) -> void:
 	if map_ref and map_ref.get_cell(next.x, next.y) == map_ref.Cell.CAMPFIRE_OUT:
 		_update_face_dir(dir)
 		campfire_out_approached.emit(next)
+		return
+	if map_ref and map_ref.get_cell(next.x, next.y) == map_ref.Cell.SKULL_PILE:
+		_update_face_dir(dir)
+		skull_approached.emit(next)
+		return
+	if map_ref and map_ref.get_cell(next.x, next.y) == map_ref.Cell.KNOWLEDGE_TABLET:
+		_update_face_dir(dir)
+		tablet_approached.emit(next)
+		return
+	if map_ref:
+		var nc: int = map_ref.get_cell(next.x, next.y)
+		if nc in [map_ref.Cell.WIZARD_STATUE, map_ref.Cell.WARRIOR_STATUE, map_ref.Cell.ANGEL_STATUE]:
+			_update_face_dir(dir)
+			var stype := "warrior" if nc == map_ref.Cell.WARRIOR_STATUE else ("angel" if nc == map_ref.Cell.ANGEL_STATUE else "wizard")
+			statue_approached.emit(next, stype)
+			return
+	if map_ref and map_ref.get_cell(next.x, next.y) == map_ref.Cell.BOOKSHELF:
+		_update_face_dir(dir)
+		bookshelf_approached.emit(next)
 		return
 	if map_ref and map_ref.is_grass(next.x, next.y):
 		_update_face_dir(dir)
