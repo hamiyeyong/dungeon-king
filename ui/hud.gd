@@ -28,6 +28,7 @@ signal campfire_action(action: String)       # "camp" | "cook" | "cancel"
 signal campfire_cook_selected(item_idx: int) # 선택한 식량의 인벤 인덱스
 signal merchant_buy(shop_idx: int)
 signal merchant_sell(inv_idx: int)
+signal well_item_selected(inv_idx: int)
 
 var hp := 20
 var max_hp := 20
@@ -77,6 +78,9 @@ var _merchant_visible := false
 var _merchant_sell_mode := false
 var _merchant_shop_items: Array[Dictionary] = []   # {item, price, sold}
 var _merchant_sell_prices: Array[int] = []
+
+var _well_popup_visible := false
+var _well_popup_indices: Array[int] = []   # 우물에 바칠 수 있는 인벤 인덱스
 
 var gold: int = 0
 
@@ -140,10 +144,16 @@ func close_inventory() -> void:
 func is_any_popup_open() -> bool:
 	return _popup_visible or _bag_visible or _action_popup_visible or \
 		_equip_action_visible or _craft_visible or \
-		_campfire_popup_visible or _cook_popup_visible or _merchant_visible
+		_campfire_popup_visible or _cook_popup_visible or \
+		_merchant_visible or _well_popup_visible
 
 func set_throw_mode(active: bool) -> void:
 	_throw_mode = active
+	queue_redraw()
+
+func show_well_popup(inv_indices: Array[int]) -> void:
+	_well_popup_indices = inv_indices
+	_well_popup_visible = true
 	queue_redraw()
 
 func show_merchant_popup(shop_items: Array[Dictionary], sell_prices: Array[int]) -> void:
@@ -221,6 +231,22 @@ func _input(event: InputEvent) -> void:
 					get_viewport().set_input_as_handled()
 					return
 		_cook_popup_visible = false
+		queue_redraw()
+		get_viewport().set_input_as_handled()
+		return
+
+	if _well_popup_visible:
+		var wpr := _well_popup_rect()
+		if wpr.has_point(p):
+			for i in _well_popup_indices.size():
+				if _well_item_rect(i, wpr).has_point(p):
+					var inv_idx: int = _well_popup_indices[i]
+					_well_popup_visible = false
+					queue_redraw()
+					well_item_selected.emit(inv_idx)
+					get_viewport().set_input_as_handled()
+					return
+		_well_popup_visible = false
 		queue_redraw()
 		get_viewport().set_input_as_handled()
 		return
@@ -398,6 +424,8 @@ func _draw() -> void:
 		_draw_equip_action_popup()
 	if _action_popup_visible:
 		_draw_action_popup()
+	if _well_popup_visible:
+		_draw_well_popup()
 	if _merchant_visible:
 		_draw_merchant_popup()
 	if _campfire_popup_visible:
@@ -908,6 +936,44 @@ func _can_craft(recipe_idx: int) -> bool:
 		if _count_mat(mat[0]) < mat[1]:
 			return false
 	return true
+
+# ── Magic Well Popup ───────────────────────────────────────────────────────
+
+func _well_popup_rect() -> Rect2:
+	var count: int = max(1, _well_popup_indices.size())
+	var ph := 40.0 + count * 40.0 + 18.0
+	var pw := 280.0
+	return Rect2((W - pw) * 0.5, (H - ph) * 0.5, pw, ph)
+
+func _well_item_rect(i: int, pr: Rect2) -> Rect2:
+	return Rect2(pr.position.x + 10, pr.position.y + 30 + i * 40, pr.size.x - 20, 36)
+
+func _draw_well_popup() -> void:
+	var font := ThemeDB.fallback_font
+	var pr := _well_popup_rect()
+	draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.5))
+	draw_rect(pr, Color(0.06, 0.10, 0.18, 0.97))
+	draw_rect(pr, Color(0.3, 0.5, 0.8, 0.8), false)
+	draw_string(font, Vector2(pr.position.x, pr.position.y + 22),
+		"🌀 이상한 우물 — 바칠 아이템",
+		HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 12, Color("#80c0ff"))
+	for i in _well_popup_indices.size():
+		var inv_idx: int = _well_popup_indices[i]
+		if inv_idx >= _inventory_items.size():
+			continue
+		var item: Item = _inventory_items[inv_idx]
+		var identified: bool = item.color_idx < _inventory_identified.size() \
+			and _inventory_identified[item.color_idx]
+		var r := _well_item_rect(i, pr)
+		draw_rect(r, Color(0.1, 0.15, 0.25, 0.85))
+		draw_rect(r, Color(0.25, 0.4, 0.65, 0.7), false)
+		var atlas: Vector2i = item.get_atlas()
+		var src := Rect2(atlas.x * ATLAS_TILE, atlas.y * ATLAS_TILE, ATLAS_TILE, ATLAS_TILE)
+		draw_texture_rect_region(TILESET, Rect2(r.position + Vector2(4, 7), Vector2(22, 22)), src, item.get_modulate())
+		draw_string(font, Vector2(r.position.x + 32, r.position.y + r.size.y * 0.5 + 5),
+			item.get_display_name(identified), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 40, 10, Color.WHITE)
+	draw_string(font, Vector2(pr.position.x, pr.end.y - 8),
+		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.32, 0.32, 0.35))
 
 # ── Merchant Popup ─────────────────────────────────────────────────────────
 

@@ -99,6 +99,14 @@ func _init_run() -> void:
 		hud.merchant_buy.connect(_on_merchant_buy)
 	if not hud.merchant_sell.is_connected(_on_merchant_sell):
 		hud.merchant_sell.connect(_on_merchant_sell)
+	if not player.door_approached.is_connected(_on_door_approached):
+		player.door_approached.connect(_on_door_approached)
+	if not player.cauldron_approached.is_connected(_on_cauldron_approached):
+		player.cauldron_approached.connect(_on_cauldron_approached)
+	if not player.well_approached.is_connected(_on_well_approached):
+		player.well_approached.connect(_on_well_approached)
+	if not hud.well_item_selected.is_connected(_on_well_item_selected):
+		hud.well_item_selected.connect(_on_well_item_selected)
 
 	# 탐험경험치 마일스톤 보너스 적용
 	_run_explore_xp = 0
@@ -1058,6 +1066,151 @@ func _on_relight_confirmed(tile_pos: Vector2i) -> void:
 
 func _on_relight_cancelled() -> void:
 	enemy_manager.do_turns(player.tile_pos)
+
+# ── 문 상호작용 ─────────────────────────────────────────────────────────────
+
+func _on_door_approached(tile_pos: Vector2i) -> void:
+	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.DOOR_OPEN)
+	hud.add_log("문을 열었습니다.")
+	_update_fov()
+	enemy_manager.do_turns(player.tile_pos)
+
+# ── 연금술 솥 상호작용 ──────────────────────────────────────────────────────
+
+func _on_cauldron_approached(tile_pos: Vector2i) -> void:
+	var bottle_count: int = 0
+	var mat_count: int = 0
+	for item in player.inventory:
+		if item.item_type == Item.Type.MATERIAL_BOTTLE:
+			bottle_count += 1
+		elif item.is_material():
+			mat_count += 1
+	if bottle_count == 0 or mat_count < 2:
+		hud.add_log("재료가 부족합니다. (빈병 ×1 + 재료 ×2 필요)")
+		enemy_manager.do_turns(player.tile_pos)
+		return
+	var is_white: bool = map.get_cell(tile_pos.x, tile_pos.y) == map.Cell.WHITE_CAULDRON
+	var label := "흰 솥 (좋은 물약)" if is_white else "검은 솥 (나쁜 물약)"
+	hud.show_confirm("연금술 솥 [%s]\n빈병 ×1 + 재료 ×2 소모하여\n물약을 만드시겠습니까?" % label,
+		_on_cauldron_confirmed.bind(is_white), _on_cauldron_cancelled)
+
+func _on_cauldron_confirmed(is_white: bool) -> void:
+	# 빈병 1개 제거
+	for i in player.inventory.size():
+		if player.inventory[i].item_type == Item.Type.MATERIAL_BOTTLE:
+			player.inventory.remove_at(i)
+			break
+	# 재료 2개 제거 (아무거나)
+	var removed: int = 0
+	var i: int = player.inventory.size() - 1
+	while i >= 0 and removed < 2:
+		if player.inventory[i].is_material():
+			player.inventory.remove_at(i)
+			removed += 1
+		i -= 1
+	# 물약 생성
+	var result := Item.new()
+	var cidx: int
+	if is_white:
+		var good: Array = [_potion_map.find(Item.Type.POTION_HEAL),
+			_potion_map.find(Item.Type.POTION_HUNGER),
+			_potion_map.find(Item.Type.POTION_CLEANSE)]
+		good = good.filter(func(x): return x >= 0)
+		cidx = good[randi() % good.size()] if not good.is_empty() else randi() % 6
+	else:
+		var bad: Array = [_potion_map.find(Item.Type.POTION_POISON),
+			_potion_map.find(Item.Type.POTION_FIRE),
+			_potion_map.find(Item.Type.POTION_SLEEP)]
+		bad = bad.filter(func(x): return x >= 0)
+		cidx = bad[randi() % bad.size()] if not bad.is_empty() else randi() % 6
+	result.item_type = _potion_map[cidx]
+	result.color_idx = cidx
+	player.inventory.append(result)
+	var ident: bool = _identified[cidx]
+	hud.add_log("연금술 성공! %s 획득!" % result.get_display_name(ident))
+	_refresh_hud()
+	enemy_manager.do_turns(player.tile_pos)
+
+func _on_cauldron_cancelled() -> void:
+	enemy_manager.do_turns(player.tile_pos)
+
+# ── 이상한 우물 상호작용 ────────────────────────────────────────────────────
+
+func _on_well_approached(_tile_pos: Vector2i) -> void:
+	if player.inventory.is_empty():
+		hud.add_log("바칠 아이템이 없습니다.")
+		enemy_manager.do_turns(player.tile_pos)
+		return
+	var indices: Array[int] = []
+	for i in player.inventory.size():
+		indices.append(i)
+	hud.show_well_popup(indices)
+
+func _on_well_item_selected(inv_idx: int) -> void:
+	if inv_idx < 0 or inv_idx >= player.inventory.size():
+		enemy_manager.do_turns(player.tile_pos)
+		return
+	var item: Item = player.inventory[inv_idx]
+	var ident: bool = item.color_idx < _identified.size() and _identified[item.color_idx]
+	var item_name: String = item.get_display_name(ident)
+	player.inventory.remove_at(inv_idx)
+
+	var roll: int = randi() % 100
+	if roll < 50:
+		# 같은 종류 다른 아이템
+		var new_item := _create_well_transform(item)
+		player.inventory.append(new_item)
+		var n_ident: bool = new_item.color_idx < _identified.size() and _identified[new_item.color_idx]
+		hud.add_log("우물이 %s을(를) %s으로 변환했습니다!" % [item_name, new_item.get_display_name(n_ident)])
+	elif roll < 80:
+		# 강화 +1 (장비인 경우) or 새 아이템 반환
+		if item.is_equipment() and item.enhance_level < MAX_ENHANCE:
+			item.enhance_level += 1
+			player.inventory.append(item)
+			hud.add_log("우물이 %s을(를) 강화했습니다! +%d" % [item_name, item.enhance_level])
+		else:
+			player.inventory.append(item)
+			hud.add_log("우물이 빛났지만... 아무 일도 없었습니다.")
+	elif roll < 95:
+		# 축복
+		item.is_blessed = true
+		item.is_cursed = false
+		player.inventory.append(item)
+		hud.add_log("우물이 %s을(를) 축복했습니다! [축복]" % item_name)
+	else:
+		# 소멸 or 저주
+		if randi() % 2 == 0:
+			hud.add_log("우물이 %s을(를) 삼켜버렸습니다!" % item_name)
+		else:
+			item.is_cursed = true
+			item.is_blessed = false
+			player.inventory.append(item)
+			hud.add_log("우물이 %s에 저주를 걸었습니다! [저주]" % item_name)
+	_refresh_hud()
+	enemy_manager.do_turns(player.tile_pos)
+
+func _create_well_transform(original: Item) -> Item:
+	var result := Item.new()
+	if original.is_equipment():
+		var types: Array = [Item.Type.WEAPON_WOOD, Item.Type.WEAPON_STONE, Item.Type.WEAPON_IRON,
+			Item.Type.SHIELD_WOOD, Item.Type.SHIELD_IRON, Item.Type.ARMOR_CLOTH, Item.Type.ARMOR_LEATHER]
+		var etype: int = types[randi() % types.size()]
+		result.item_type = etype
+		if Item.EQUIPMENT_DATA.has(etype):
+			result.durability = Item.EQUIPMENT_DATA[etype][3]
+			result.max_durability = result.durability
+	elif original.is_scroll():
+		var sidx: int = randi() % 3
+		result.item_type = Item.SCROLL_TYPES[sidx]
+		result.color_idx = 6 + sidx
+	elif original.is_food():
+		result.item_type = [Item.Type.FOOD, Item.Type.COOKED_FOOD][randi() % 2]
+	else:
+		# 물약
+		var cidx: int = randi() % 6
+		result.item_type = _potion_map[cidx]
+		result.color_idx = cidx
+	return result
 
 func _on_home_requested() -> void:
 	get_tree().call_deferred("change_scene_to_file", "res://home/home.tscn")
