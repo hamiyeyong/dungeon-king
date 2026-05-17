@@ -140,6 +140,27 @@ func spawn_one_near(tile_pos: Vector2i, map: Node, floor_num: int) -> void:
 	e.init(candidates[0], map)
 	enemies.append(e)
 
+func spawn_elite_near(tile_pos: Vector2i, map: Node, floor_num: int) -> void:
+	var candidates: Array[Vector2i] = []
+	for dy in range(-3, 4):
+		for dx in range(-3, 4):
+			var tx: int = tile_pos.x + dx
+			var ty: int = tile_pos.y + dy
+			if map.is_walkable(tx, ty) and get_enemy_at(Vector2i(tx, ty)) == null:
+				candidates.append(Vector2i(tx, ty))
+	if candidates.is_empty():
+		return
+	candidates.shuffle()
+	var e: Enemy = ENEMY_SCENE.instantiate() as Enemy
+	add_child(e)
+	_setup_enemy(e, _pick_type(floor_num), floor_num)
+	e.hp = int(e.hp * 1.5)
+	e.max_hp = e.hp
+	e.atk += 2
+	e.display_name = "★" + e.display_name
+	e.init(candidates[0], map)
+	enemies.append(e)
+
 func get_enemy_at(pos: Vector2i):
 	for e in enemies:
 		if e.tile_pos == pos:
