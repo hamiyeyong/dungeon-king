@@ -112,4 +112,4 @@
 - [x] main.gd — 게임오버/클리어 시 홈 씬 전환
 - [x] hud.gd — restart_requested → home_requested, 버튼 "홈으로" 변경
 - [x] project.godot — 메인 씬 home.tscn, SaveData 오토로드 등록
-- [ ] 아이템 제작 XP 연동 (05-crafting.md 구현 후)
+- [x] 아이템 제작 XP 연동 (제작 성공 시 +30 XP)

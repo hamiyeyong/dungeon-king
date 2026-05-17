@@ -270,6 +270,7 @@ func _process_enemy_statuses() -> void:
 			enemy_manager.remove_enemy(e)
 			player.gain_exp(reward)
 			_hunter_arrow_drop(kill_tile)
+			_try_drop_raw_meat(kill_tile)
 
 func _on_enemy_attacked_player(atk_value: int, attacker_name: String) -> void:
 	_spawn_hit(player.position)
@@ -380,7 +381,7 @@ func _on_log_message(msg: String) -> void:
 
 func _refresh_hud() -> void:
 	hud.update_stats(player.hp, player.max_hp, player.mp, player.max_mp,
-		player.hunger, player.fatigue, player.floor_num, player.level, player.atk, player.def_, player.gold)
+		player.hunger, player.fatigue, player.floor_num, player.level, player.atk, player.def_, player.gold, player.turn_num)
 	hud.update_status(player.poison_turns, player.fire_turns, player.sleep_turns,
 		player.paralyze_turns, player.frozen_turns, player.slow_turns,
 		player.wound_turns, player.blind_turns, player.invincible_turns)
@@ -501,6 +502,8 @@ func _chest_give_slot_a() -> void:
 		var cidx: int = randi() % 6
 		item.item_type = _potion_map[cidx]
 		item.color_idx = cidx
+	if randi() % 10 == 0:
+		item.is_blessed = true
 	player.inventory.append(item)
 	var ident: bool = not item.is_food() and _identified[item.color_idx]
 	hud.add_log(item.get_display_name(ident) + " 획득! (상자 A)")
@@ -542,6 +545,8 @@ func _chest_give_slot_b() -> void:
 	else:
 		# 영웅의 돌 (희귀, 1/12 확률)
 		item.item_type = Item.Type.MATERIAL_HERO_STONE
+	if randi() % 10 == 0:
+		item.is_blessed = true
 	player.inventory.append(item)
 	var b_ident: bool = not item.is_scroll() or _identified[item.color_idx]
 	hud.add_log(item.get_display_name(b_ident) + " 획득! (상자 B)")
@@ -719,6 +724,8 @@ func _create_random_item() -> Item:
 	else:
 		item.color_idx = randi() % 6
 		item.item_type = _potion_map[item.color_idx]
+	if randi() % 10 == 0:
+		item.is_blessed = true
 	return item
 
 func _on_item_action(idx: int, action: String) -> void:
@@ -953,6 +960,13 @@ func _execute_throw(target_tile: Vector2i) -> void:
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
 
+func _try_drop_raw_meat(tile_pos: Vector2i) -> void:
+	if randf() < 0.3:
+		var meat := Item.new()
+		meat.item_type = Item.Type.MATERIAL_RAW_MEAT
+		_pick_or_drop(meat, tile_pos)
+		hud.add_log("생고기 드롭!")
+
 func _hunter_arrow_drop(tile_pos: Vector2i) -> void:
 	if player.class_type != Player.ClassType.HUNTER:
 		return
@@ -963,6 +977,7 @@ func _hunter_arrow_drop(tile_pos: Vector2i) -> void:
 
 func _on_player_enemy_killed(tile_pos: Vector2i) -> void:
 	_hunter_arrow_drop(tile_pos)
+	_try_drop_raw_meat(tile_pos)
 
 func _apply_throw_damage(enemy, dmg: int, source: String) -> void:
 	var actual: int = enemy.take_damage(dmg)
@@ -974,6 +989,7 @@ func _apply_throw_damage(enemy, dmg: int, source: String) -> void:
 		enemy_manager.remove_enemy(enemy)
 		player.gain_exp(reward)
 		_hunter_arrow_drop(kill_tile)
+		_try_drop_raw_meat(kill_tile)
 
 # ── Game over / Clear ──────────────────────────────────────────────────────
 
@@ -1016,6 +1032,7 @@ func _on_craft_recipe(recipe_idx: int) -> void:
 	result.max_durability = recipe[1] as int
 	player.inventory.append(result)
 	hud.add_log("%s 제작 완료!" % Item.get_type_name(recipe[0]))
+	_run_explore_xp += 30
 	_refresh_hud()
 
 # ── 모닥불 상호작용 ─────────────────────────────────────────────────────────────
