@@ -78,9 +78,10 @@ const EQUIPMENT_DATA := {
 # 제작 레시피: [결과타입, 결과내구도, [[재료타입, 개수], ...]]
 const RECIPES: Array = [
 	[Type.WEAPON_WOOD,    15, [[Type.MATERIAL_BRANCH, 2]]],
-	[Type.SHIELD_WOOD,    12, [[Type.MATERIAL_BRANCH, 3]]],
-	[Type.WEAPON_STONE,   20, [[Type.MATERIAL_STONE,  2]]],
-	[Type.ARMOR_CLOTH,    15, [[Type.MATERIAL_HERB,   2]]],
+	[Type.SHIELD_WOOD,    12, [[Type.MATERIAL_BRANCH, 2]]],
+	[Type.WEAPON_STONE,   20, [[Type.MATERIAL_BRANCH, 1], [Type.MATERIAL_STONE, 1]]],
+	[Type.ARMOR_CLOTH,    15, [[Type.MATERIAL_CLOTH,  2]]],
+	[Type.ARMOR_LEATHER,  25, [[Type.MATERIAL_CLOTH,  1], [Type.MATERIAL_STONE, 1]]],
 	[Type.POTION_HEAL,     0, [[Type.MATERIAL_HERB,   1], [Type.MATERIAL_STONE, 1]]],
 	[Type.SCROLL_ENHANCE,  0, [[Type.MATERIAL_HERB,   2], [Type.MATERIAL_BRANCH, 1]]],
 	[Type.MATERIAL_TORCH,  0, [[Type.MATERIAL_BRANCH, 1], [Type.MATERIAL_CLOTH, 1]]],
