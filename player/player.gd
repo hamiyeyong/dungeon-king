@@ -420,6 +420,9 @@ func _attack_enemy(enemy) -> void:
 	if next_atk_multiplier > 1:
 		log_message.emit("강타! %d배 데미지!" % next_atk_multiplier)
 		next_atk_multiplier = 1
+	if crit_rune_pct > 0 and randi() % 100 < crit_rune_pct:
+		effective_atk *= 2
+		log_message.emit("크리티컬!")
 	var dmg: int = enemy.take_damage(effective_atk)
 	log_message.emit("%s에게 %d 피해!" % [enemy.display_name, dmg])
 	if enemy.is_dead():
