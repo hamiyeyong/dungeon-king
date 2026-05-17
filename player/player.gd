@@ -6,6 +6,7 @@ signal log_message(msg: String)
 signal turn_done
 signal hit_at(world_pos: Vector2)
 signal attacked_cell(tile_pos: Vector2i)
+signal enemy_killed(tile_pos: Vector2i)
 signal campfire_approached(tile_pos: Vector2i)
 signal campfire_out_approached(tile_pos: Vector2i)
 signal merchant_approached(tile_pos: Vector2i)
@@ -405,10 +406,12 @@ func _attack_enemy(enemy) -> void:
 	var dmg: int = enemy.take_damage(effective_atk)
 	log_message.emit("%s에게 %d 피해!" % [enemy.display_name, dmg])
 	if enemy.is_dead():
+		var kill_tile: Vector2i = enemy.tile_pos
 		var reward: int = 5 * floor_num
 		log_message.emit("%s 처치! EXP +%d" % [enemy.display_name, reward])
 		enemy_manager_ref.remove_enemy(enemy)
 		gain_exp(reward)
+		enemy_killed.emit(kill_tile)
 
 func equip(item) -> void:
 	if item.is_weapon():
@@ -462,6 +465,9 @@ func _recalc_equip_stats() -> void:
 	var shield_def: int = equipped_shield.get_equip_def() if equipped_shield else 0
 	if shield_def_rune_pct > 0 and equipped_shield:
 		shield_def = int(shield_def * (1.0 + shield_def_rune_pct / 100.0))
+	# 힘 20 달성 시 방패 방어력 2배
+	if equipped_shield and str_stat >= 20:
+		shield_def *= 2
 	var armor_def: int = equipped_armor.get_equip_def() if equipped_armor else 0
 	var is_light_armor: bool = equipped_armor != null and \
 		equipped_armor.item_type == Item.Type.ARMOR_CLOTH
