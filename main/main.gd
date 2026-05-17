@@ -704,7 +704,12 @@ func _apply_scroll(sidx: int) -> void:
 			hud.add_log("식별 주문서! 모든 아이템이 식별되었습니다.")
 
 func _try_enhance() -> String:
+	# 무기 → 방패 → 갑옷 순서로 강화 대상 선택
 	var target: Item = player.equipped_weapon
+	if target == null:
+		target = player.equipped_shield
+	if target == null:
+		target = player.equipped_armor
 	if target == null:
 		return ""
 	if target.enhance_level >= MAX_ENHANCE:
@@ -1003,40 +1008,49 @@ func _execute_throw(target_tile: Vector2i) -> void:
 
 	match item.item_type:
 		Item.Type.POTION_POISON:
-			var target = enemy_manager.get_enemy_at(target_tile)
-			if target:
-				_spawn_hit(target.position)
-				_spawn_poison(target.position)
-				_apply_throw_damage(target, 8, item.get_display_name(true))
-				target.apply_status("poison", Item.POISON_TURNS)
-			else:
-				_spawn_poison(map.tile_to_world(target_tile))
-				hud.add_log(item.get_display_name(true) + "이 허공에 깨졌다.")
+			# 3×3 독가스 범위
+			_spawn_poison(map.tile_to_world(target_tile))
+			var hit_poison := false
+			for dx in range(-1, 2):
+				for dy in range(-1, 2):
+					var e = enemy_manager.get_enemy_at(target_tile + Vector2i(dx, dy))
+					if e and is_instance_valid(e):
+						_spawn_hit(e.position)
+						_apply_throw_damage(e, 5, item.get_display_name(true))
+						e.apply_status("poison", Item.POISON_TURNS)
+						hit_poison = true
+			if not hit_poison:
+				hud.add_log(item.get_display_name(true) + "이 깨지며 독가스가 퍼졌다.")
 		Item.Type.POTION_FIRE:
+			# 3×3 화염 범위
 			_spawn_hit(map.tile_to_world(target_tile))
 			_spawn_fire(map.tile_to_world(target_tile))
-			var hit_any := false
-			var center = enemy_manager.get_enemy_at(target_tile)
-			if center:
-				_apply_throw_damage(center, 10, item.get_display_name(true))
-				center.apply_status("fire", Item.FIRE_TURNS)
-				hit_any = true
-			for adj in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]:
-				var e = enemy_manager.get_enemy_at(target_tile + adj)
-				if e and is_instance_valid(e):
-					_spawn_hit(e.position)
-					_spawn_fire(e.position)
-					_apply_throw_damage(e, 5, item.get_display_name(true))
-					e.apply_status("fire", Item.FIRE_TURNS_ADJ)
-					hit_any = true
-			if not hit_any:
+			var hit_fire := false
+			for dx in range(-1, 2):
+				for dy in range(-1, 2):
+					var e = enemy_manager.get_enemy_at(target_tile + Vector2i(dx, dy))
+					if e and is_instance_valid(e):
+						_spawn_hit(e.position)
+						_spawn_fire(e.position)
+						var dmg_val: int = 10 if (dx == 0 and dy == 0) else 5
+						var turns_val: int = Item.FIRE_TURNS if (dx == 0 and dy == 0) else Item.FIRE_TURNS_ADJ
+						_apply_throw_damage(e, dmg_val, item.get_display_name(true))
+						e.apply_status("fire", turns_val)
+						hit_fire = true
+			if not hit_fire:
 				hud.add_log(item.get_display_name(true) + "이 타오르며 사라졌다.")
 		Item.Type.POTION_SLEEP:
-			var target = enemy_manager.get_enemy_at(target_tile)
-			if target:
-				_spawn_hit(target.position)
-				target.apply_status("sleep", Item.SLEEP_TURNS)
-				hud.add_log("%s이 잠들었다! (%d턴)" % [target.display_name, Item.SLEEP_TURNS])
+			# 3×3 수면 가스 범위
+			var hit_sleep := false
+			for dx in range(-1, 2):
+				for dy in range(-1, 2):
+					var e = enemy_manager.get_enemy_at(target_tile + Vector2i(dx, dy))
+					if e and is_instance_valid(e):
+						_spawn_hit(e.position)
+						e.apply_status("sleep", Item.SLEEP_TURNS)
+						hit_sleep = true
+			if hit_sleep:
+				hud.add_log("%s을 던졌습니다! 3×3 수면 가스!" % item.get_display_name(true))
 			else:
 				hud.add_log(item.get_display_name(true) + "이 허공에 깨졌다.")
 		Item.Type.POTION_CLEANSE:
@@ -1069,6 +1083,17 @@ func _execute_throw(target_tile: Vector2i) -> void:
 			else:
 				_drop_item(item, target_tile)
 				hud.add_log("생고기가 바닥에 떨어졌다.")
+		Item.Type.POTION_HEAL:
+			# 던질 때 1/3 효과 (적에게 맞으면 적을 회복)
+			var heal_throw: int = 3
+			var e_heal = enemy_manager.get_enemy_at(target_tile)
+			if e_heal and is_instance_valid(e_heal):
+				e_heal.hp = min(e_heal.max_hp, e_heal.hp + heal_throw)
+				hud.add_log("%s에게 회복 물약! HP +%d" % [e_heal.display_name, heal_throw])
+			else:
+				hud.add_log(item.get_display_name(_identified[item.color_idx]) + "이 깨졌습니다.")
+		Item.Type.POTION_HUNGER:
+			hud.add_log(item.get_display_name(_identified[item.color_idx]) + "이 깨졌습니다.")
 		_:
 			if item.is_equipment() or item.is_material() or item.item_type == Item.Type.COOKED_FOOD:
 				_drop_item(item, target_tile)
