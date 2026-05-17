@@ -31,6 +31,7 @@ signal merchant_sell(inv_idx: int)
 signal well_item_selected(inv_idx: int)
 signal spell_slot_tapped
 signal spell_selected(spell_id: String)
+signal class_skill_tapped
 
 var hp := 20
 var max_hp := 20
@@ -86,6 +87,10 @@ var _well_popup_indices: Array[int] = []   # 우물에 바칠 수 있는 인벤 
 
 var _spell_popup_visible := false
 var _spell_popup_list: Array = []   # [{id, name, mp_cost}]
+
+var _class_skill_cooldown: int = 0
+var _class_skill_label: String = "스킬"
+var _class_skill_mp: int = 30  # 플레이어 현재 MP (그레이아웃 판단용)
 
 var gold: int = 0
 
@@ -464,6 +469,12 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# 직업 스킬
+	if _class_skill_rect().has_point(p):
+		class_skill_tapped.emit()
+		get_viewport().set_input_as_handled()
+		return
+
 	# 마법 슬롯
 	if _skill_slot_rect(0).has_point(p):
 		spell_slot_tapped.emit()
@@ -632,6 +643,19 @@ func _draw_bottom_bar() -> void:
 	draw_rect(br, Color(0.4, 0.5, 0.75, 0.85), false, 1.5)
 	draw_string(font, Vector2(br.position.x + br.size.x * 0.5, br.position.y + br.size.y * 0.5 + 5),
 		"가방", HORIZONTAL_ALIGNMENT_CENTER, -1, 11, Color(0.7, 0.85, 1.0))
+
+	# 직업 스킬 버튼
+	var csr := _class_skill_rect()
+	var cs_ready: bool = _class_skill_cooldown <= 0 and _class_skill_mp >= 35
+	var cs_bg := Color(0.18, 0.10, 0.24, 0.9) if cs_ready else Color(0.10, 0.08, 0.12, 0.7)
+	var cs_border := Color(0.7, 0.4, 0.9, 0.85) if cs_ready else Color(0.35, 0.25, 0.4, 0.6)
+	draw_rect(csr, cs_bg)
+	draw_rect(csr, cs_border, false)
+	draw_string(font, Vector2(csr.position.x, csr.position.y + csr.size.y * 0.5 + 5),
+		_class_skill_label, HORIZONTAL_ALIGNMENT_CENTER, csr.size.x, 10, Color(0.85, 0.65, 1.0) if cs_ready else Color(0.5, 0.4, 0.55))
+	if _class_skill_cooldown > 0:
+		draw_string(font, Vector2(csr.position.x, csr.position.y + csr.size.y - 6),
+			str(_class_skill_cooldown), HORIZONTAL_ALIGNMENT_CENTER, csr.size.x, 10, Color(1.0, 0.6, 0.3))
 
 	# 마법 슬롯
 	var sk0 := _skill_slot_rect(0)
@@ -934,10 +958,21 @@ func _bag_btn_rect() -> Rect2:
 	var after_equips := start_x + 3 * (EQUIP_SZ + EQUIP_GAP)
 	return Rect2(after_equips + 4, y, BAG_W, EQUIP_SZ)
 
+func _class_skill_rect() -> Rect2:
+	var skill_left := W - 8 - 2 * SLOT_SZ - 6
+	var y := H - BAR_H + (BAR_H - SLOT_SZ) / 2
+	return Rect2(skill_left - SLOT_SZ - 6, y, SLOT_SZ, SLOT_SZ)
+
 func _skill_slot_rect(i: int) -> Rect2:
 	var skill_left := W - 8 - 2 * SLOT_SZ - 6
 	var y := H - BAR_H + (BAR_H - SLOT_SZ) / 2
 	return Rect2(skill_left + i * (SLOT_SZ + 6), y, SLOT_SZ, SLOT_SZ)
+
+func set_class_skill_info(label: String, cooldown: int, mp: int) -> void:
+	_class_skill_label = label
+	_class_skill_cooldown = cooldown
+	_class_skill_mp = mp
+	queue_redraw()
 
 func _throw_cancel_rect() -> Rect2:
 	return Rect2(W - SLOT_SZ - 6, 6, SLOT_SZ, SLOT_SZ)
