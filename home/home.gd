@@ -28,6 +28,9 @@ var _rune_scroll: int = 0
 var _chest_open: bool = false
 var _chest_result: Dictionary = {}
 
+# 룬 상세/강화 팝업
+var _selected_rune_id: String = ""
+
 # 직업 카드 레이아웃
 const CARD_W    := 170
 const CARD_H    := 110
@@ -107,6 +110,26 @@ func _scroll_dn_rect() -> Rect2:
 func _chest_ok_rect() -> Rect2:
 	return Rect2(W * 0.5 - 50.0, H * 0.5 + 98.0, 100.0, 28.0)
 
+func _rune_detail_popup_rect() -> Rect2:
+	return Rect2((W - 480.0) * 0.5, (H - 130.0) * 0.5, 480.0, 130.0)
+
+func _rune_detail_btn_y() -> float:
+	var pr := _rune_detail_popup_rect()
+	return pr.position.y + pr.size.y - 36.0
+
+func _rune_detail_equip_btn_rect() -> Rect2:
+	var pr := _rune_detail_popup_rect()
+	var bx: float = pr.position.x + (pr.size.x - 340.0) * 0.5
+	return Rect2(bx, _rune_detail_btn_y(), 130.0, 26.0)
+
+func _rune_detail_upgrade_btn_rect() -> Rect2:
+	var eq := _rune_detail_equip_btn_rect()
+	return Rect2(eq.end.x + 10.0, _rune_detail_btn_y(), 130.0, 26.0)
+
+func _rune_detail_close_btn_rect() -> Rect2:
+	var up := _rune_detail_upgrade_btn_rect()
+	return Rect2(up.end.x + 10.0, _rune_detail_btn_y(), 60.0, 26.0)
+
 # ── 입력 ──────────────────────────────────────────────────────────────────────
 
 func _input(event: InputEvent) -> void:
@@ -122,6 +145,10 @@ func _input(event: InputEvent) -> void:
 		if _chest_ok_rect().has_point(pos):
 			_chest_open = false
 			queue_redraw()
+		return
+
+	if _selected_rune_id != "":
+		_handle_rune_detail_input(pos)
 		return
 
 	if _tab_rect(0).has_point(pos): _tab = 0; _rune_scroll = 0; queue_redraw(); return
@@ -161,13 +188,35 @@ func _handle_rune_input(pos: Vector2) -> void:
 
 	for vi in min(RUNE_ROWS_VIS, owned.size() - _rune_scroll):
 		if _rune_row_rect(vi).has_point(pos):
-			var rid: String = owned[_rune_scroll + vi]
-			SaveData.toggle_rune_equip(rid)
+			_selected_rune_id = owned[_rune_scroll + vi]
 			queue_redraw()
 			return
 
 	if _btn_rect.has_point(pos):
 		get_tree().change_scene_to_file("res://main/main.tscn")
+
+func _handle_rune_detail_input(pos: Vector2) -> void:
+	var rid: String = _selected_rune_id
+
+	if _rune_detail_close_btn_rect().has_point(pos):
+		_selected_rune_id = ""
+		queue_redraw()
+		return
+
+	if _rune_detail_equip_btn_rect().has_point(pos):
+		SaveData.toggle_rune_equip(rid)
+		queue_redraw()
+		return
+
+	if _rune_detail_upgrade_btn_rect().has_point(pos):
+		if SaveData.can_upgrade_rune(rid):
+			SaveData.upgrade_rune(rid)
+			queue_redraw()
+		return
+
+	if not _rune_detail_popup_rect().has_point(pos):
+		_selected_rune_id = ""
+		queue_redraw()
 
 # ── 렌더링 ────────────────────────────────────────────────────────────────────
 
@@ -186,7 +235,9 @@ func _draw() -> void:
 
 	_draw_button(font)
 
-	if _chest_open:
+	if _selected_rune_id != "":
+		_draw_rune_detail_popup(font)
+	elif _chest_open:
 		_draw_chest_popup(font)
 
 func _draw_header(font: Font) -> void:
@@ -344,15 +395,24 @@ func _draw_rune_tab(font: Font) -> void:
 			draw_string(font, Vector2(r.position.x + 182, r.position.y + 14),
 				def[2], HORIZONTAL_ALIGNMENT_LEFT, W - 320, 8, Color(0.6, 0.6, 0.65))
 
-			var right_x: float = r.position.x + r.size.x - 78
+			var lv: int = SaveData.get_rune_level(rid)
+			var max_lv: int = SaveData.get_rune_max_level(rid)
+			var right_x: float = r.position.x + r.size.x - 100
 			draw_string(font, Vector2(right_x, r.position.y + 13),
-				"파편 %d개" % frags,
-				HORIZONTAL_ALIGNMENT_LEFT, 76, 8, Color(0.7, 0.8, 0.9))
+				"Lv.%d/%d  파편%d" % [lv, max_lv, frags],
+				HORIZONTAL_ALIGNMENT_LEFT, 98, 8, Color(0.7, 0.8, 0.9))
 
-			var status: String = "장착중" if equipped else "탭 장착"
-			var sc: Color = gc if equipped else Color(0.4, 0.6, 0.4)
+			var can_up: bool = SaveData.can_upgrade_rune(rid)
+			var status: String
+			var sc: Color
+			if equipped:
+				status = "장착중"; sc = gc
+			elif can_up:
+				status = "▲ 강화 가능"; sc = Color("#aaee66")
+			else:
+				status = "탭으로 상세"; sc = Color(0.45, 0.45, 0.55)
 			draw_string(font, Vector2(right_x, r.position.y + 22),
-				status, HORIZONTAL_ALIGNMENT_LEFT, 76, 7, sc)
+				status, HORIZONTAL_ALIGNMENT_LEFT, 98, 7, sc)
 
 		if _rune_scroll > 0:
 			var sr := _scroll_up_rect()
@@ -382,6 +442,80 @@ func _draw_button(font: Font) -> void:
 	draw_string(font,
 		Vector2(_btn_rect.position.x, _btn_rect.position.y + _btn_rect.size.y * 0.5 + 7),
 		"던전 시작", HORIZONTAL_ALIGNMENT_CENTER, _btn_rect.size.x, 16, Color.WHITE)
+
+func _draw_rune_detail_popup(font: Font) -> void:
+	draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.55))
+
+	var rid: String = _selected_rune_id
+	if not SaveData.RUNE_DEFS.has(rid): return
+
+	var pr := _rune_detail_popup_rect()
+	var def: Array = SaveData.RUNE_DEFS[rid]
+	var grade: int = def[1]
+	var gc: Color = SaveData.RUNE_GRADE_COLORS[grade]
+	var lv: int = SaveData.get_rune_level(rid)
+	var max_lv: int = SaveData.get_rune_max_level(rid)
+	var frags: int = SaveData.rune_fragments.get(rid, 0) as int
+	var cost: Array = SaveData.get_upgrade_cost(rid)
+	var can_up: bool = SaveData.can_upgrade_rune(rid)
+	var equipped: bool = SaveData.is_rune_equipped(rid)
+
+	draw_rect(pr, Color(0.06, 0.06, 0.11, 0.97))
+	draw_rect(pr, gc, false, 2.0)
+
+	# 룬 이름 + 등급
+	draw_string(font, Vector2(pr.position.x + 12, pr.position.y + 22),
+		"[%s]" % SaveData.RUNE_GRADE_NAMES[grade],
+		HORIZONTAL_ALIGNMENT_LEFT, 60, 9, gc)
+	draw_string(font, Vector2(pr.position.x + 72, pr.position.y + 22),
+		def[0], HORIZONTAL_ALIGNMENT_LEFT, 180, 13, gc)
+	draw_string(font, Vector2(pr.position.x + pr.size.x - 12, pr.position.y + 22),
+		"Lv.%d / %d" % [lv, max_lv],
+		HORIZONTAL_ALIGNMENT_RIGHT, 120, 11, Color(0.85, 0.85, 0.6))
+
+	# 효과 설명
+	draw_string(font, Vector2(pr.position.x + 12, pr.position.y + 42),
+		def[2], HORIZONTAL_ALIGNMENT_LEFT, pr.size.x - 24, 10, Color(0.75, 0.75, 0.8))
+
+	# 파편 보유 / 강화 비용
+	var cost_text: String
+	if lv >= max_lv:
+		cost_text = "최대 레벨 달성"
+	else:
+		cost_text = "강화 비용: 파편 %d개  ·  주화 %d" % [cost[0], cost[1]]
+	var cost_col: Color = Color(0.5, 0.5, 0.55) if lv >= max_lv \
+		else (Color("#aaee66") if can_up else Color(0.6, 0.4, 0.4))
+	draw_string(font, Vector2(pr.position.x + 12, pr.position.y + 60),
+		"보유 파편: %d   %s" % [frags, cost_text],
+		HORIZONTAL_ALIGNMENT_LEFT, pr.size.x - 24, 9, cost_col)
+
+	# 버튼: 장착/해제
+	var eq_r := _rune_detail_equip_btn_rect()
+	var eq_label: String = "해제" if equipped else "장착"
+	var eq_bg: Color = Color(0.3, 0.15, 0.15, 0.9) if equipped else Color(0.12, 0.35, 0.12, 0.9)
+	var eq_border: Color = Color(0.7, 0.3, 0.3, 0.8) if equipped else Color(0.3, 0.7, 0.3, 0.8)
+	draw_rect(eq_r, eq_bg)
+	draw_rect(eq_r, eq_border, false, 1.5)
+	draw_string(font, Vector2(eq_r.position.x, eq_r.position.y + eq_r.size.y * 0.5 + 5),
+		eq_label, HORIZONTAL_ALIGNMENT_CENTER, eq_r.size.x, 11, Color.WHITE)
+
+	# 버튼: 강화
+	var up_r := _rune_detail_upgrade_btn_rect()
+	var up_bg: Color = Color(0.2, 0.3, 0.1, 0.9) if can_up else Color(0.1, 0.1, 0.1, 0.6)
+	var up_border: Color = Color(0.5, 0.8, 0.2, 0.8) if can_up else Color(0.3, 0.3, 0.3, 0.5)
+	draw_rect(up_r, up_bg)
+	draw_rect(up_r, up_border, false, 1.5)
+	var up_label: String = "▲ 강화 +1" if lv < max_lv else "최대 레벨"
+	var up_text_col: Color = Color.WHITE if can_up else Color(0.4, 0.4, 0.4)
+	draw_string(font, Vector2(up_r.position.x, up_r.position.y + up_r.size.y * 0.5 + 5),
+		up_label, HORIZONTAL_ALIGNMENT_CENTER, up_r.size.x, 11, up_text_col)
+
+	# 버튼: 닫기
+	var cl_r := _rune_detail_close_btn_rect()
+	draw_rect(cl_r, Color(0.15, 0.15, 0.2, 0.9))
+	draw_rect(cl_r, Color(0.4, 0.4, 0.5, 0.7), false, 1.5)
+	draw_string(font, Vector2(cl_r.position.x, cl_r.position.y + cl_r.size.y * 0.5 + 5),
+		"닫기", HORIZONTAL_ALIGNMENT_CENTER, cl_r.size.x, 11, Color(0.7, 0.7, 0.75))
 
 func _draw_chest_popup(font: Font) -> void:
 	draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.65))
