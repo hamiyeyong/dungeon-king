@@ -20,6 +20,7 @@ enum Cell {
 	HERB_ICE, HERB_BLOOD_MOSS, HERB_GINSENG,
 	HERB_NIGHTSHADE, HERB_AMBROSIA, HERB_MUSHROOM,
 	HERB_MANDRAKE, HERB_FIREWORT, HERB_DREAMGRASS,
+	HERB_GARLIC,
 }
 
 # 타일셋 atlas 좌표 (col, row) — tiles-64.png 기준
@@ -226,6 +227,7 @@ func _place_objects(floor_num: int = 1) -> void:
 		Cell.HERB_ICE, Cell.HERB_BLOOD_MOSS, Cell.HERB_GINSENG,
 		Cell.HERB_NIGHTSHADE, Cell.HERB_AMBROSIA, Cell.HERB_MUSHROOM,
 		Cell.HERB_MANDRAKE, Cell.HERB_FIREWORT, Cell.HERB_DREAMGRASS,
+		Cell.HERB_GARLIC,
 	]
 	all_herbs.shuffle()
 	var herb_count: int = randi_range(2, 4)
@@ -349,6 +351,8 @@ func _draw() -> void:
 						draw_rect(dest, Color(0.9, 0.35, 0.1, 0.85))
 					elif cell == Cell.HERB_DREAMGRASS:
 						draw_rect(dest, Color(0.55, 0.45, 0.75, 0.85))
+					elif cell == Cell.HERB_GARLIC:
+						draw_rect(dest, Color(0.9, 0.9, 0.85, 0.85))
 					else:
 						_blit(dest, _cell_atlas(cell))
 					# 특수 오브젝트 텍스트 레이블
@@ -386,6 +390,7 @@ func _draw() -> void:
 						Cell.HERB_MANDRAKE:  _draw_obj_label(dest, "만드라고라", Color("#88cc66"))
 						Cell.HERB_FIREWORT:  _draw_obj_label(dest, "화염초", Color("#ff8844"))
 						Cell.HERB_DREAMGRASS:_draw_obj_label(dest, "꿈결초", Color("#cc99ff"))
+						Cell.HERB_GARLIC:    _draw_obj_label(dest, "마늘", Color("#eeeedd"))
 			if has_fov:
 				if not vis:
 					draw_rect(dest, Color(0, 0, 0, 0.6))
@@ -553,12 +558,16 @@ func is_walkable(x: int, y: int) -> bool:
 	var cell: int = grid[y][x]
 	return cell not in [
 		Cell.WALL, Cell.CAMPFIRE, Cell.CAMPFIRE_OUT,
-		Cell.GRASS, Cell.JAR, Cell.DOOR,
+		Cell.JAR, Cell.DOOR,
 		Cell.WHITE_CAULDRON, Cell.BLACK_CAULDRON, Cell.MAGIC_WELL, Cell.MERCHANT,
 		Cell.SKULL_PILE, Cell.KNOWLEDGE_TABLET,
 		Cell.WIZARD_STATUE, Cell.WARRIOR_STATUE, Cell.ANGEL_STATUE,
 		Cell.BOOKSHELF,
 	]
+
+func is_herb_cell(x: int, y: int) -> bool:
+	var c: int = get_cell(x, y)
+	return c in [Cell.HERB_ICE, Cell.HERB_BLOOD_MOSS, Cell.HERB_GINSENG, Cell.HERB_NIGHTSHADE, Cell.HERB_AMBROSIA, Cell.HERB_MUSHROOM, Cell.HERB_MANDRAKE, Cell.HERB_FIREWORT, Cell.HERB_DREAMGRASS, Cell.HERB_GARLIC]
 
 func is_door(x: int, y: int) -> bool:
 	return get_cell(x, y) == Cell.DOOR

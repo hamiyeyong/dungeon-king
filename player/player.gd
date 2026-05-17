@@ -58,6 +58,7 @@ var floor_num := 1
 var atk := 5
 var def_ := 1
 var curse_atk: int = 0
+var curse_def: int = 0
 var exp := 0
 var level := 1
 var gold: int = 0
@@ -65,11 +66,13 @@ var turn_num: int = 0
 var next_atk_multiplier: int = 1   # 강타 주문서 효과 (사용 후 다음 공격 배수)
 
 var inventory: Array[Item] = []
-const MAX_INVENTORY := 10
+const MAX_INVENTORY := 20
 
 var equipped_weapon: Item = null
 var equipped_shield: Item = null
 var equipped_armor: Item  = null
+var equipped_throwable: Item = null
+var throwable_count: int = 0
 
 var poison_turns: int = 0
 var fire_turns: int = 0
@@ -90,7 +93,9 @@ var auto_identify_pct: int = 0     # 장착 룬 — 아이템 자동 식별 %
 var mage_mp_regen_rune: bool = false  # 장착 룬 — 경갑 시 MP 자연회복 증가
 var learned_spells: Dictionary = {}
 var regen_turns: int = 0
+var herb_regen_turns: int = 0
 var bark_shield: int = 0
+var _exhaustion_loss: int = 0  # 탈진으로 줄어든 최대 HP 누적 (피로도 정상화 시 서서히 회복)
 
 var input_blocked := false
 var hud_ref: Node = null
@@ -146,6 +151,7 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	class_skill_cooldown = 0
 	_slow_skip = false
 	curse_atk = 0
+	curse_def = 0
 	hunger = 0
 	fatigue = 0
 	exp = 0
@@ -156,6 +162,7 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	crit_rune_pct = 0
 	learned_spells.clear()
 	regen_turns = 0
+	herb_regen_turns = 0
 	bark_shield = 0
 	# 직업별 스탯 초기화
 	class_type = SaveData.selected_class
@@ -169,6 +176,8 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	equipped_weapon = null
 	equipped_shield = null
 	equipped_armor = null
+	equipped_throwable = null
+	throwable_count = 0
 	_recalc_equip_stats()
 
 func apply_rune_effects() -> void:
@@ -379,10 +388,6 @@ func _try_move(dir: Vector2i) -> void:
 		_update_face_dir(dir)
 		bookshelf_approached.emit(next)
 		return
-	if map_ref and map_ref.is_grass(next.x, next.y):
-		_update_face_dir(dir)
-		_attack_grass(next)
-		return
 	if map_ref and map_ref.is_jar(next.x, next.y):
 		_update_face_dir(dir)
 		_attack_grass(next)
@@ -390,6 +395,7 @@ func _try_move(dir: Vector2i) -> void:
 	if map_ref and map_ref.is_walkable(next.x, next.y):
 		tile_pos = next
 		position = map_ref.tile_to_world(tile_pos)
+		herb_regen_turns = 0
 		_update_anim(dir)
 		_on_step()
 		turn_done.emit()
@@ -412,11 +418,15 @@ func _attack_enemy(enemy) -> void:
 	if fatigue >= 600:
 		max_hp = max(5, max_hp - 1)
 		hp = min(hp, max_hp)
+		_exhaustion_loss += 1
 		log_message.emit("탈진 상태! 최대 체력이 줄어들고 있습니다!")
 	var effective_atk: int = atk * next_atk_multiplier
 	if next_atk_multiplier > 1:
 		log_message.emit("강타! %d배 데미지!" % next_atk_multiplier)
 		next_atk_multiplier = 1
+	if crit_rune_pct > 0 and randi() % 100 < crit_rune_pct:
+		effective_atk *= 2
+		log_message.emit("크리티컬!")
 	var dmg: int = enemy.take_damage(effective_atk)
 	log_message.emit("%s에게 %d 피해!" % [enemy.display_name, dmg])
 	if enemy.is_dead():
@@ -451,6 +461,8 @@ func unequip(slot: String) -> String:
 		"armor":  item = equipped_armor
 	if item == null:
 		return ""
+	if item.is_cursed:
+		return "%s은(는) 저주받아 해제할 수 없습니다!" % item.get_display_name(true)
 	if inventory.size() >= MAX_INVENTORY:
 		return "인벤토리가 가득 찼습니다."
 	match slot:
@@ -461,6 +473,21 @@ func unequip(slot: String) -> String:
 	_recalc_equip_stats()
 	stats_changed.emit()
 	return "%s 해제" % item.get_display_name(true)
+
+func equip_throwable(item: Item) -> void:
+	equipped_throwable = item
+	throwable_count = Item.THROWABLE_BUNDLE_SIZES.get(item.item_type, 1)
+	stats_changed.emit()
+
+func use_throwable() -> bool:
+	if equipped_throwable == null or throwable_count <= 0:
+		return false
+	throwable_count -= 1
+	if throwable_count <= 0:
+		equipped_throwable = null
+		throwable_count = 0
+	stats_changed.emit()
+	return true
 
 func unequip_weapon() -> void:
 	if equipped_weapon and inventory.size() < MAX_INVENTORY:
@@ -487,7 +514,7 @@ func _recalc_equip_stats() -> void:
 		equipped_armor.item_type == Item.Type.ARMOR_CLOTH
 	if armor_def_rune_pct > 0 and is_light_armor:
 		armor_def = int(armor_def * (1.0 + armor_def_rune_pct / 100.0))
-	def_ = base_def + shield_def + armor_def
+	def_ = max(0, base_def + shield_def + armor_def - curse_def)
 
 func _on_weapon_used() -> void:
 	if equipped_weapon:
@@ -595,6 +622,13 @@ func _on_step(consume_hunger: bool = true) -> void:
 		if fatigue < 450 and mp < max_mp:
 			mp = min(max_mp, mp + 2)
 
+	# 탈진 해제 시 최대 HP 서서히 회복 (1/턴)
+	if fatigue < 600 and _exhaustion_loss > 0:
+		max_hp += 1
+		hp = min(hp + 1, max_hp)
+		_exhaustion_loss -= 1
+		log_message.emit("피로 회복 중. 최대 체력이 서서히 돌아옵니다.")
+
 	# MP 자연 회복 (피로도 정상일 때, 이동 턴에도 적용)
 	if consume_hunger and fatigue < 450 and mp < max_mp:
 		var mp_regen: int = 1
@@ -609,6 +643,12 @@ func _on_step(consume_hunger: bool = true) -> void:
 		hp = min(max_hp, hp + regen_hp)
 		var regen_suffix := " (%d턴 남음)" % regen_turns if regen_turns > 0 else " (해제)"
 		log_message.emit("재생! HP +%d%s" % [regen_hp, regen_suffix])
+	if herb_regen_turns > 0:
+		herb_regen_turns -= 1
+		var herb_hp: int = max(1, max_hp / 10)
+		hp = min(max_hp, hp + herb_hp)
+		var herb_suffix := " (%d턴 남음, 이동 시 해제)" % herb_regen_turns if herb_regen_turns > 0 else " (해제)"
+		log_message.emit("영지버섯 재생! HP +%d%s" % [herb_hp, herb_suffix])
 	if sleep_turns > 0:
 		sleep_turns -= 1
 		var suffix := " (%d턴 남음)" % sleep_turns if sleep_turns > 0 else " (해제)"
