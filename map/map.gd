@@ -7,7 +7,7 @@ const TILE_SIZE := 32
 const ATLAS_TILE := 64  # 타일셋 원본 타일 크기
 
 enum Cell {
-	WALL, FLOOR, STAIRS, CHEST, CHEST_OPEN,
+	WALL, FLOOR, STAIRS, CHEST, CHEST_OPEN, CHEST_HERO,
 	CAMPFIRE, CAMPFIRE_OUT, TRAP, GRASS, JAR, JAR_OPEN,
 	DOOR, DOOR_OPEN,
 	WHITE_CAULDRON, BLACK_CAULDRON, MAGIC_WELL,
@@ -81,6 +81,7 @@ const MAX_FOG_ALPHA         := 0.78
 
 var grid: Array[Array] = []
 var rooms: Array[Rect2i] = []
+var hero_chest_pos: Vector2i = Vector2i(-1, -1)
 var tile_variant_grid: Array[Array] = []
 var throw_highlight_tiles: Array[Vector2i] = []
 var fov_visible: Array = []   # Array[Array[bool]] — 현재 시야 내 타일
@@ -205,12 +206,18 @@ func _place_objects(floor_num: int = 1) -> void:
 					room_tiles.append(Vector2i(rx, ry))
 	room_tiles.shuffle()
 
+	hero_chest_pos = Vector2i(-1, -1)
 	var special_types: Array[int] = []
 	if randi() % 2 == 0: special_types.append(Cell.TAINTED_SPRING)
 	if randi() % 4 == 0: special_types.append(Cell.CLEAR_SPRING)
 	if randi() % 2 == 0: special_types.append(Cell.SKULL_PILE)
-	if randi() % 3 == 0: special_types.append(Cell.ALTAR)
-	if randi() % 5 == 0: special_types.append(Cell.ALTAR_BIG)
+	if randi() % 3 == 0:
+		special_types.append(Cell.ALTAR)
+		special_types.append(Cell.CHEST_HERO)
+	if randi() % 5 == 0:
+		special_types.append(Cell.ALTAR_BIG)
+		if Cell.CHEST_HERO not in special_types:
+			special_types.append(Cell.CHEST_HERO)
 	if randi() % 3 == 0: special_types.append(Cell.KNOWLEDGE_TABLET)
 	if randi() % 4 == 0: special_types.append(Cell.WARRIOR_STATUE)
 	if randi() % 5 == 0: special_types.append(Cell.WIZARD_STATUE)
@@ -221,6 +228,8 @@ func _place_objects(floor_num: int = 1) -> void:
 			break
 		var pos: Vector2i = room_tiles.pop_back()
 		grid[pos.y][pos.x] = obj_type
+		if obj_type == Cell.CHEST_HERO:
+			hero_chest_pos = pos
 
 	# 약초밭: 층당 2~4종 랜덤 배치
 	var all_herbs: Array[int] = [
@@ -359,6 +368,7 @@ func _draw() -> void:
 					match cell:
 						Cell.CHEST:          _draw_obj_label(dest, "상자", Color("#f0d060"))
 						Cell.CHEST_OPEN:     _draw_obj_label(dest, "빈상자", Color("#888888"))
+						Cell.CHEST_HERO:     _draw_obj_label(dest, "영웅의상자", Color("#ff8844"))
 						Cell.GRASS:          _draw_obj_label(dest, "수풀", Color("#88cc44"))
 						Cell.JAR:            _draw_obj_label(dest, "항아리", Color("#ddbb88"))
 						Cell.CAMPFIRE:       _draw_obj_label(dest, "야영지", Color("#ffaa44"))
@@ -417,6 +427,14 @@ func _draw() -> void:
 		if fiv.count > 1:
 			draw_string(font, Vector2(cx + 4, cy + 10), "×%d" % fiv.count,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(1.0, 1.0, 0.6))
+		var label: String = fiv.get("name", "")
+		if label != "":
+			var font_size := 8
+			var label_w: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+			var lx: float = cx - label_w * 0.5
+			var ly: float = cy + sz * 0.5 + font_size + 1
+			draw_string(font, Vector2(lx - 1, ly), label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0, 0, 0, 0.75))
+			draw_string(font, Vector2(lx, ly), label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1.0, 1.0, 0.85))
 
 	for tile in throw_highlight_tiles:
 		var dest := Rect2(tile.x * TILE_SIZE, tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
@@ -462,6 +480,7 @@ func _cell_atlas(cell: int) -> Vector2i:
 	match cell:
 		Cell.CHEST:          return TILE_CHEST
 		Cell.CHEST_OPEN:     return TILE_CHEST_OPEN
+		Cell.CHEST_HERO:     return TILE_CHEST
 		Cell.CAMPFIRE:       return TILE_CAMPFIRE
 		Cell.CAMPFIRE_OUT:   return TILE_CAMPFIRE
 		Cell.TRAP:           return TILE_TRAP

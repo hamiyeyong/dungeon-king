@@ -171,6 +171,7 @@ func _init_run() -> void:
 	player.apply_rune_effects()
 	_give_class_starting_gear()
 	enemy_manager.spawn(map.rooms, map, player.floor_num)
+	_spawn_hero_chest_guards()
 	camera.position = player.position
 	_update_fov()
 	_refresh_hud()
@@ -243,6 +244,9 @@ func _on_player_turn_done() -> void:
 
 	if cell == map.Cell.CHEST:
 		_open_chest(player.tile_pos)
+
+	if cell == map.Cell.CHEST_HERO:
+		_open_hero_chest(player.tile_pos)
 
 	if cell == map.Cell.TRAP:
 		_trigger_trap(player.tile_pos)
@@ -478,6 +482,8 @@ func _do_floor_transition(direction: int) -> void:
 	SaveData.update_best_floor(player.floor_num)
 	if new_floor > MAX_FLOOR:
 		SaveData.award_chest(player.floor_num)
+		var coins: int = randi_range(player.floor_num * 3, player.floor_num * 7)
+		SaveData.award_coins(coins)
 		SaveData.add_explore_xp(_run_explore_xp)
 		_run_explore_xp = 0
 		_trigger_game_clear()
@@ -493,6 +499,7 @@ func _do_floor_transition(direction: int) -> void:
 	player.tile_pos = start
 	player.position = map.tile_to_world(start)
 	enemy_manager.spawn(map.rooms, map, player.floor_num)
+	_spawn_hero_chest_guards()
 	camera.position = player.position
 	_update_fov()
 	_refresh_hud()
@@ -504,6 +511,34 @@ func _do_floor_transition(direction: int) -> void:
 	player.input_blocked = false
 
 # ── Chest / Items ──────────────────────────────────────────────────────────
+
+func _spawn_hero_chest_guards() -> void:
+	if map.hero_chest_pos == Vector2i(-1, -1):
+		return
+	if enemy_manager.is_boss_floor(player.floor_num):
+		return
+	enemy_manager.spawn_elite_near(map.hero_chest_pos, map, player.floor_num)
+	enemy_manager.spawn_elite_near(map.hero_chest_pos, map, player.floor_num)
+
+func _open_hero_chest(pos: Vector2i) -> void:
+	map.set_cell(pos.x, pos.y, map.Cell.CHEST_OPEN)
+	hud.add_log("✨ 영웅의 상자를 열었습니다!")
+	_chest_give_slot_a()
+	# 슬롯 B: 영웅의 돌 확정
+	if player.inventory.size() >= player.MAX_INVENTORY:
+		var stone := Item.new()
+		stone.item_type = Item.Type.MATERIAL_HERO_STONE
+		_drop_item(stone, pos)
+		hud.add_log("영웅의 돌 — 인벤 가득, 바닥에 떨어졌습니다.")
+	else:
+		var stone := Item.new()
+		stone.item_type = Item.Type.MATERIAL_HERO_STONE
+		player.inventory.append(stone)
+		hud.add_log("영웅의 돌 획득! (상자 B)")
+	var chest_gold: int = randi() % 21 + 10
+	player.gold += chest_gold
+	hud.add_log("💰 골드 +%d (총 %dG)" % [chest_gold, player.gold])
+	_refresh_hud()
 
 func _open_chest(pos: Vector2i) -> void:
 	map.set_cell(pos.x, pos.y, map.Cell.CHEST_OPEN)
@@ -593,7 +628,8 @@ func _refresh_floor_items() -> void:
 	for p in by_pos:
 		var d = by_pos[p]
 		var it: Item = d.item
-		visuals.append({"pos": p, "atlas": it.get_atlas(), "mod": it.get_modulate(), "count": d.count})
+		var ident: bool = it.color_idx >= 0 and it.color_idx < _identified.size() and _identified[it.color_idx]
+		visuals.append({"pos": p, "atlas": it.get_atlas(), "mod": it.get_modulate(), "count": d.count, "name": it.get_display_name(ident)})
 	map.update_floor_items(visuals)
 
 func _try_pickup_floor_items() -> void:
@@ -1288,6 +1324,8 @@ func _trigger_game_over() -> void:
 	player.input_blocked = true
 	SaveData.update_best_floor(player.floor_num)
 	SaveData.award_chest(player.floor_num)
+	var coins: int = randi_range(player.floor_num * 3, player.floor_num * 7)
+	SaveData.award_coins(coins)
 	SaveData.add_explore_xp(_run_explore_xp)
 	hud.add_log("탐험경험치 +%d XP 획득!" % _run_explore_xp)
 	_run_explore_xp = 0
