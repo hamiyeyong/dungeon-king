@@ -652,6 +652,15 @@ func _trigger_trap(pos: Vector2i) -> void:
 			player.apply_status("fire", Item.FIRE_TURNS)
 			_spawn_fire(player.position)
 			hud.add_log("화염 함정! HP -8 + 화상")
+			# 인접 1칸 AOE — 주변 몬스터에게 화염 피해
+			for dx in range(-1, 2):
+				for dy in range(-1, 2):
+					if dx == 0 and dy == 0:
+						continue
+					var ae: Object = enemy_manager.get_enemy_at(pos + Vector2i(dx, dy))
+					if ae and is_instance_valid(ae):
+						_spawn_fire(ae.position)
+						_apply_throw_damage(ae, 5, "화염 함정")
 		2:  # 텔레포트
 			var floor_tiles: Array[Vector2i] = []
 			for y in map.HEIGHT:
