@@ -200,6 +200,19 @@ func learn_spell(spell_id: String) -> String:
 	learned_spells[spell_id] = 1
 	return "%s 마법을 배웠습니다!" % SPELL_DATA[spell_id][0]
 
+const MAX_SPELL_LEVEL := 5
+
+func enhance_spell(spell_id: String) -> String:
+	if not SPELL_DATA.has(spell_id):
+		return "알 수 없는 마법입니다."
+	if not learned_spells.has(spell_id):
+		return "배우지 않은 마법입니다."
+	var cur: int = learned_spells[spell_id]
+	if cur >= MAX_SPELL_LEVEL:
+		return "%s 마법은 이미 최대 레벨입니다." % SPELL_DATA[spell_id][0]
+	learned_spells[spell_id] = cur + 1
+	return "%s 마법이 Lv.%d로 강화되었습니다!" % [SPELL_DATA[spell_id][0], learned_spells[spell_id]]
+
 func spend_mp_for_spell(cost: int) -> void:
 	if mp >= cost:
 		mp -= cost
