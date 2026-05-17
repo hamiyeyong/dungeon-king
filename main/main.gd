@@ -634,12 +634,15 @@ func _trigger_trap(pos: Vector2i) -> void:
 		7:  # 얼음
 			player.apply_status("frozen", FROZEN_TURNS)
 			hud.add_log("얼음 함정! 빙결 (%d턴)" % FROZEN_TURNS)
-		8:  # 소환 (미구현 — 일단 데미지)
-			player.take_damage(4, "소환 함정")
-			hud.add_log("소환 함정! 이상한 기운이 느껴진다...")
-		9:  # 알람 (미구현 — 일단 데미지)
-			player.take_damage(2, "알람 함정")
-			hud.add_log("알람 함정! 요란한 소리가 울렸다!")
+		8:  # 소환: 1~3마리 근처 소환
+			var summon_count: int = randi() % 3 + 1
+			for _i in summon_count:
+				enemy_manager.spawn_one_near(pos, map, player.floor_num)
+			hud.add_log("소환 함정! 몬스터 %d마리가 나타났다!" % summon_count)
+		9:  # 알람: 층 내 모든 적이 플레이어 위치 인식
+			for e in enemy_manager.enemies:
+				e.is_alerted = true
+			hud.add_log("알람 함정! 요란한 소리에 몬스터들이 몰려온다!")
 	_refresh_hud()
 	if player.hp <= 0:
 		_trigger_game_over()
