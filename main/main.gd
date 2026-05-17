@@ -1467,24 +1467,21 @@ func _do_camp(tile_pos: Vector2i) -> void:
 
 func _on_campfire_out_approached(tile_pos: Vector2i) -> void:
 	var has_branch := false
-	var has_firewort := false
 	var has_torch := false
 	for inv_item in player.inventory:
 		match inv_item.item_type:
 			Item.Type.MATERIAL_BRANCH: has_branch = true
-			Item.Type.MATERIAL_HERB_FIREWORT: has_firewort = true
 			Item.Type.MATERIAL_TORCH: has_torch = true
-	var can_wood: bool = has_branch and has_firewort
-	if not has_torch and not can_wood:
-		hud.add_log("재료가 없습니다. (나뭇가지+화염초 꽃잎 또는 횃불 필요)")
+	if not has_torch and not has_branch:
+		hud.add_log("재료가 없습니다. (나뭇가지 ×1 또는 횃불 ×1 필요)")
 		enemy_manager.do_turns(player.tile_pos)
 		return
-	var cost_msg: String = "횃불 소모" if has_torch else "나뭇가지 + 화염초 꽃잎 소모"
+	var cost_msg: String = "횃불 소모" if has_torch else "나뭇가지 소모"
 	hud.show_confirm("불을 피울까요?\n(%s)" % cost_msg,
 		_on_relight_confirmed.bind(tile_pos), _on_relight_cancelled)
 
 func _on_relight_confirmed(tile_pos: Vector2i) -> void:
-	# 횃불 우선, 없으면 나뭇가지+화염초 꽃잎 소모
+	# 횃불 우선, 없으면 나뭇가지 소모
 	for i in player.inventory.size():
 		if player.inventory[i].item_type == Item.Type.MATERIAL_TORCH:
 			player.inventory.remove_at(i)
@@ -1494,29 +1491,18 @@ func _on_relight_confirmed(tile_pos: Vector2i) -> void:
 			_refresh_hud()
 			enemy_manager.do_turns(player.tile_pos)
 			return
-	# 횃불 없음 → 나뭇가지 + 화염초 꽃잎
-	var branch_idx: int = -1
-	var firewort_idx: int = -1
+	# 횃불 없음 → 나뭇가지 소모
 	for i in player.inventory.size():
-		var t: int = player.inventory[i].item_type
-		if t == Item.Type.MATERIAL_BRANCH and branch_idx < 0:
-			branch_idx = i
-		elif t == Item.Type.MATERIAL_HERB_FIREWORT and firewort_idx < 0:
-			firewort_idx = i
-	if branch_idx >= 0 and firewort_idx >= 0:
-		var to_remove: Array[int] = [branch_idx, firewort_idx]
-		to_remove.sort()
-		to_remove.reverse()
-		for idx in to_remove:
-			player.inventory.remove_at(idx)
-		map.set_cell(tile_pos.x, tile_pos.y, map.Cell.CAMPFIRE)
-		hud.add_log("불을 피웠습니다! (나뭇가지 + 화염초 꽃잎 소모)")
-		_update_fov()
-		_refresh_hud()
-		enemy_manager.do_turns(player.tile_pos)
-	else:
-		hud.add_log("재료가 부족합니다.")
-		enemy_manager.do_turns(player.tile_pos)
+		if player.inventory[i].item_type == Item.Type.MATERIAL_BRANCH:
+			player.inventory.remove_at(i)
+			map.set_cell(tile_pos.x, tile_pos.y, map.Cell.CAMPFIRE)
+			hud.add_log("불을 피웠습니다! (나뭇가지 소모)")
+			_update_fov()
+			_refresh_hud()
+			enemy_manager.do_turns(player.tile_pos)
+			return
+	hud.add_log("재료가 부족합니다.")
+	enemy_manager.do_turns(player.tile_pos)
 
 func _on_relight_cancelled() -> void:
 	enemy_manager.do_turns(player.tile_pos)
