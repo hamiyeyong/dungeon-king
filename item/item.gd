@@ -377,8 +377,9 @@ func apply(player) -> String:
 				player.stats_changed.emit()
 				return "축복 수면 물약! 수면 대신 피로도 -300 [축복]"
 			player.apply_status("sleep", SLEEP_TURNS)
+			player.fatigue = max(0, player.fatigue - 100) as int
 			player.stats_changed.emit()
-			return "수면 상태이상! (%d턴)" % SLEEP_TURNS
+			return "수면 상태이상! (%d턴) 피로도 -100" % SLEEP_TURNS
 		Type.FOOD:
 			var reduce: int = 45 if is_blessed else 30
 			player.hunger = max(0, player.hunger - reduce) as int
