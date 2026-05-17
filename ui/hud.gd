@@ -24,6 +24,8 @@ signal item_action(idx: int, action: String)
 signal unequip_requested(slot: String)
 signal throw_cancelled
 signal craft_recipe_selected(recipe_idx: int)
+signal cauldron_material_chosen(inv_idx: int)
+signal cauldron_picker_cancelled
 signal campfire_action(action: String)       # "camp" | "cook" | "cancel"
 signal campfire_cook_selected(item_idx: int) # 선택한 식량의 인벤 인덱스
 signal merchant_buy(shop_idx: int)
@@ -73,6 +75,10 @@ var _equip_action_slot := ""
 
 var _throw_mode := false
 var _craft_visible := false
+var _craft_tab: int = 0  # 0=장비, 1=물약, 2=기타
+var _cauldron_picker_visible := false
+var _cauldron_is_white := false
+var _cauldron_herb_indices: Array[int] = []
 
 var _campfire_popup_visible := false
 var _cook_popup_visible := false
@@ -181,9 +187,15 @@ func close_inventory() -> void:
 
 func is_any_popup_open() -> bool:
 	return _popup_visible or _bag_visible or _action_popup_visible or \
-		_equip_action_visible or _craft_visible or \
+		_equip_action_visible or _craft_visible or _cauldron_picker_visible or \
 		_campfire_popup_visible or _cook_popup_visible or \
 		_merchant_visible or _well_popup_visible or _spell_popup_visible
+
+func show_cauldron_picker(herb_inv_indices: Array[int], is_white: bool) -> void:
+	_cauldron_herb_indices = herb_inv_indices
+	_cauldron_is_white = is_white
+	_cauldron_picker_visible = true
+	queue_redraw()
 
 func set_throw_mode(active: bool) -> void:
 	_throw_mode = active
@@ -382,20 +394,53 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	if _cauldron_picker_visible:
+		var cpr := _cauldron_picker_rect()
+		if cpr.has_point(p):
+			for i in _cauldron_herb_indices.size():
+				if _cauldron_herb_rect(i, cpr).has_point(p):
+					var inv_idx: int = _cauldron_herb_indices[i]
+					_cauldron_picker_visible = false
+					_cauldron_herb_indices = []
+					queue_redraw()
+					cauldron_material_chosen.emit(inv_idx)
+					get_viewport().set_input_as_handled()
+					return
+		_cauldron_picker_visible = false
+		_cauldron_herb_indices = []
+		queue_redraw()
+		cauldron_picker_cancelled.emit()
+		get_viewport().set_input_as_handled()
+		return
+
 	if _craft_visible:
 		var pr := _craft_popup_rect()
 		if pr.has_point(p):
-			for i in Item.RECIPES.size():
-				if _craft_recipe_rect(i).has_point(p):
-					if _can_craft(i):
-						_craft_visible = false
-						queue_redraw()
-						craft_recipe_selected.emit(i)
-					else:
-						add_log("재료가 부족합니다.")
+			for t in 3:
+				if _craft_tab_rect(t, pr).has_point(p):
+					_craft_tab = t
+					queue_redraw()
 					get_viewport().set_input_as_handled()
 					return
-		_craft_visible = false
+			if _craft_tab != 1:
+				var row := 0
+				for i in Item.RECIPES.size():
+					var recipe: Array = Item.RECIPES[i]
+					var in_tab := (_craft_tab == 0 and Item.EQUIPMENT_DATA.has(recipe[0])) or \
+						(_craft_tab == 2 and not Item.EQUIPMENT_DATA.has(recipe[0]))
+					if in_tab:
+						if _craft_content_row_rect(row, pr).has_point(p):
+							if _can_craft(i):
+								_craft_visible = false
+								queue_redraw()
+								craft_recipe_selected.emit(i)
+							else:
+								add_log("재료가 부족합니다.")
+							get_viewport().set_input_as_handled()
+							return
+						row += 1
+		else:
+			_craft_visible = false
 		queue_redraw()
 		get_viewport().set_input_as_handled()
 		return
@@ -518,6 +563,8 @@ func _draw() -> void:
 		_draw_throw_cancel()
 	if _craft_visible:
 		_draw_craft_popup()
+	if _cauldron_picker_visible:
+		_draw_cauldron_picker()
 	if _bag_visible:
 		_draw_bag_popup()
 	if _equip_action_visible:
@@ -873,28 +920,126 @@ func _draw_craft_popup() -> void:
 	var pr := _craft_popup_rect()
 	draw_rect(pr, Color(0.05, 0.09, 0.06, 0.97))
 	draw_rect(pr, Color(0.35, 0.7, 0.35, 0.75), false, 1.5)
-	draw_string(font, Vector2(pr.position.x, pr.position.y + 22),
-		"제  작", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 14, Color("#80e880"))
-	for i in Item.RECIPES.size():
-		var recipe: Array = Item.RECIPES[i]
-		var mats: Array = recipe[2]
-		var can: bool = _can_craft(i)
-		var r := _craft_recipe_rect(i)
-		draw_rect(r, Color(0.12, 0.22, 0.12, 0.9) if can else Color(0.10, 0.10, 0.10, 0.7))
-		draw_rect(r, Color(0.4, 0.65, 0.4, 0.75) if can else Color(0.25, 0.25, 0.25, 0.4), false)
-		var mat_str := ""
-		for mat in mats:
-			if mat_str != "": mat_str += " + "
-			var have: int = _count_mat(mat[0])
-			var need: int = mat[1]
-			var cnt_color := "" if can else " (%d/%d)" % [have, need]
-			mat_str += "%s×%d%s" % [Item.get_type_name(mat[0]), need, cnt_color]
-		var label := "%s  ←  %s" % [Item.get_type_name(recipe[0]), mat_str]
-		var lc := Color(0.9, 1.0, 0.85) if can else Color(0.5, 0.5, 0.5)
-		draw_string(font, Vector2(r.position.x + 10, r.position.y + r.size.y * 0.5 + 5),
-			label, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 12, 11, lc)
+	draw_string(font, Vector2(pr.position.x, pr.position.y + 18),
+		"제  작", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 13, Color("#80e880"))
+	var tab_names := ["장비", "물약", "기타"]
+	for t in 3:
+		var tr := _craft_tab_rect(t, pr)
+		var active := _craft_tab == t
+		draw_rect(tr, Color(0.15, 0.3, 0.15, 0.95) if active else Color(0.07, 0.12, 0.07, 0.8))
+		draw_rect(tr, Color(0.5, 0.8, 0.5, 0.8) if active else Color(0.25, 0.4, 0.25, 0.5), false)
+		draw_string(font, Vector2(tr.position.x, tr.position.y + tr.size.y * 0.5 + 5),
+			tab_names[t], HORIZONTAL_ALIGNMENT_CENTER, tr.size.x, 11,
+			Color(0.9, 1.0, 0.9) if active else Color(0.55, 0.65, 0.55))
+	if _craft_tab == 0:
+		var row := 0
+		for i in Item.RECIPES.size():
+			var recipe: Array = Item.RECIPES[i]
+			if not Item.EQUIPMENT_DATA.has(recipe[0]): continue
+			var can: bool = _can_craft(i)
+			var r := _craft_content_row_rect(row, pr)
+			draw_rect(r, Color(0.12, 0.22, 0.12, 0.9) if can else Color(0.10, 0.10, 0.10, 0.7))
+			draw_rect(r, Color(0.4, 0.65, 0.4, 0.75) if can else Color(0.25, 0.25, 0.25, 0.4), false)
+			var eq: Array = Item.EQUIPMENT_DATA[recipe[0]]
+			var stat := "ATK+%d" % eq[1] if eq[1] > 0 else "DEF+%d" % eq[2]
+			var label := "%s(%s) ← %s" % [eq[0], stat, _recipe_mat_str(i, can)]
+			draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
+				label, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 12, 11,
+				Color(0.9, 1.0, 0.85) if can else Color(0.5, 0.5, 0.5))
+			row += 1
+	elif _craft_tab == 1:
+		draw_string(font, Vector2(pr.position.x, pr.position.y + 54),
+			"연금술 솥에서만 제작 가능합니다", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 10, Color(0.7, 0.8, 0.5))
+		var herbs: Array = [
+			[Item.Type.MATERIAL_HERB,           "약초",           "랜덤 물약"],
+			[Item.Type.MATERIAL_HERB_BLOOD_MOSS,  "말린 피이끼",   "회복 물약"],
+			[Item.Type.MATERIAL_HERB_GINSENG,     "산삼 뿌리",     "포만 물약"],
+			[Item.Type.MATERIAL_HERB_AMBROSIA,    "암브로시아 꽃", "회복 물약"],
+			[Item.Type.MATERIAL_HERB_MUSHROOM,    "말린 영지버섯", "포만 물약"],
+			[Item.Type.MATERIAL_HERB_NIGHTSHADE,  "나이트쉐이드",  "독 물약"],
+			[Item.Type.MATERIAL_HERB_FIREWORT,    "화염초 꽃잎",   "화염 물약"],
+			[Item.Type.MATERIAL_HERB_MANDRAKE,    "만드라고라",    "수면 물약"],
+			[Item.Type.MATERIAL_HERB_DREAMGRASS,  "꿈결초 꽃잎",   "수면 물약"],
+			[Item.Type.MATERIAL_HERB_ICE,         "식은 얼음송이", "수면 물약"],
+			[Item.Type.MATERIAL_HERB_GARLIC,      "생마늘",        "정화 물약"],
+		]
+		for i in herbs.size():
+			var r := _craft_content_row_rect_compact(i, pr)
+			var have: int = _count_mat(herbs[i][0])
+			draw_rect(r, Color(0.08, 0.14, 0.08, 0.85))
+			draw_rect(r, Color(0.3, 0.55, 0.3, 0.5), false)
+			var lc := Color(0.85, 1.0, 0.85) if have > 0 else Color(0.45, 0.55, 0.45)
+			draw_string(font, Vector2(r.position.x + 6, r.position.y + r.size.y * 0.5 + 5),
+				herbs[i][1] + "+빈병", HORIZONTAL_ALIGNMENT_LEFT, r.size.x * 0.58 - 6, 10, lc)
+			draw_string(font, Vector2(r.position.x + r.size.x * 0.58, r.position.y + r.size.y * 0.5 + 5),
+				"→ " + herbs[i][2], HORIZONTAL_ALIGNMENT_LEFT, r.size.x * 0.42 - 6, 10,
+				Color(0.7, 0.9, 0.7) if have > 0 else Color(0.4, 0.5, 0.4))
+	else:
+		var row := 0
+		for i in Item.RECIPES.size():
+			var recipe: Array = Item.RECIPES[i]
+			if Item.EQUIPMENT_DATA.has(recipe[0]): continue
+			var can: bool = _can_craft(i)
+			var r := _craft_content_row_rect(row, pr)
+			draw_rect(r, Color(0.12, 0.22, 0.12, 0.9) if can else Color(0.10, 0.10, 0.10, 0.7))
+			draw_rect(r, Color(0.4, 0.65, 0.4, 0.75) if can else Color(0.25, 0.25, 0.25, 0.4), false)
+			var label := "%s ← %s" % [Item.get_type_name(recipe[0]), _recipe_mat_str(i, can)]
+			draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
+				label, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 12, 11,
+				Color(0.9, 1.0, 0.85) if can else Color(0.5, 0.5, 0.5))
+			row += 1
 	draw_string(font, Vector2(pr.position.x, pr.end.y - 7),
 		"영역 밖 터치로 닫기", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.35, 0.35, 0.35))
+
+func _draw_cauldron_picker() -> void:
+	var font := ThemeDB.fallback_font
+	draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.45))
+	var pr := _cauldron_picker_rect()
+	draw_rect(pr, Color(0.04, 0.07, 0.12, 0.97))
+	draw_rect(pr, Color(0.35, 0.55, 0.9, 0.75), false, 1.5)
+	var title := "흰 솥 — 재료 선택" if _cauldron_is_white else "검은 솥 — 재료 선택"
+	draw_string(font, Vector2(pr.position.x, pr.position.y + 20),
+		title, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 13, Color("#80c8ff"))
+	draw_string(font, Vector2(pr.position.x, pr.position.y + 36),
+		"빈병 ×1 + 선택 재료 ×1 소모", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 10, Color(0.55, 0.6, 0.65))
+	for i in _cauldron_herb_indices.size():
+		var inv_idx: int = _cauldron_herb_indices[i]
+		if inv_idx >= _inventory_items.size(): continue
+		var herb: Item = _inventory_items[inv_idx]
+		var r := _cauldron_herb_rect(i, pr)
+		draw_rect(r, Color(0.1, 0.18, 0.28, 0.9))
+		draw_rect(r, Color(0.4, 0.55, 0.8, 0.6), false)
+		var result_str: String
+		if Item.HERB_POTION_MAP.has(herb.item_type):
+			result_str = " → " + _potion_type_name(Item.HERB_POTION_MAP[herb.item_type])
+		else:
+			result_str = " → 랜덤 물약"
+		draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
+			Item.get_type_name(herb.item_type) + result_str,
+			HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 12, 11, Color(0.9, 0.95, 1.0))
+	draw_string(font, Vector2(pr.position.x, pr.end.y - 7),
+		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.35, 0.35, 0.35))
+
+func _potion_type_name(potion_type: int) -> String:
+	match potion_type:
+		Item.Type.POTION_HEAL:    return "회복 물약"
+		Item.Type.POTION_HUNGER:  return "포만 물약"
+		Item.Type.POTION_POISON:  return "독 물약"
+		Item.Type.POTION_FIRE:    return "화염 물약"
+		Item.Type.POTION_CLEANSE: return "정화 물약"
+		Item.Type.POTION_SLEEP:   return "수면 물약"
+	return "물약"
+
+func _recipe_mat_str(recipe_idx: int, can: bool) -> String:
+	var mats: Array = Item.RECIPES[recipe_idx][2]
+	var s := ""
+	for mat in mats:
+		if s != "": s += "+"
+		var have: int = _count_mat(mat[0])
+		var need: int = mat[1]
+		s += "%s×%d" % [Item.get_type_name(mat[0]), need]
+		if not can: s += "(%d/%d)" % [have, need]
+	return s
 
 func _action_is_equip() -> bool:
 	if _action_item_idx < 0 or _action_item_idx >= _inventory_items.size():
@@ -1063,13 +1208,41 @@ func _bag_inv_slot_rect(i: int) -> Rect2:
 	return Rect2(start_x + col * (BAG_INV_SZ + 4), start_y + row * (BAG_INV_SZ + 4), BAG_INV_SZ, BAG_INV_SZ)
 
 func _craft_popup_rect() -> Rect2:
-	var pw := 310.0
-	var ph := 36.0 + float(Item.RECIPES.size()) * 42.0 + 22.0
+	var pw := 314.0
+	var content_h: float
+	if _craft_tab == 0:
+		var n := 0
+		for r in Item.RECIPES:
+			if Item.EQUIPMENT_DATA.has(r[0]): n += 1
+		content_h = float(max(1, n)) * 40.0
+	elif _craft_tab == 1:
+		content_h = 18.0 + 11.0 * 28.0
+	else:
+		var n := 0
+		for r in Item.RECIPES:
+			if not Item.EQUIPMENT_DATA.has(r[0]): n += 1
+		content_h = float(max(1, n)) * 40.0
+	var ph := 50.0 + content_h + 20.0
 	return Rect2((W - pw) * 0.5, (H - ph) * 0.5, pw, ph)
 
-func _craft_recipe_rect(i: int) -> Rect2:
-	var pr := _craft_popup_rect()
-	return Rect2(pr.position.x + 8, pr.position.y + 30 + i * 42, pr.size.x - 16, 36)
+func _craft_tab_rect(t: int, pr: Rect2) -> Rect2:
+	var tab_w := (pr.size.x - 12.0) / 3.0
+	return Rect2(pr.position.x + 6.0 + float(t) * tab_w, pr.position.y + 22.0, tab_w - 2.0, 22.0)
+
+func _craft_content_row_rect(row: int, pr: Rect2) -> Rect2:
+	return Rect2(pr.position.x + 8.0, pr.position.y + 50.0 + float(row) * 40.0, pr.size.x - 16.0, 36.0)
+
+func _craft_content_row_rect_compact(row: int, pr: Rect2) -> Rect2:
+	return Rect2(pr.position.x + 8.0, pr.position.y + 60.0 + float(row) * 28.0, pr.size.x - 16.0, 24.0)
+
+func _cauldron_picker_rect() -> Rect2:
+	var pw := 300.0
+	var count: int = max(1, _cauldron_herb_indices.size())
+	var ph := 46.0 + float(count) * 40.0 + 20.0
+	return Rect2((W - pw) * 0.5, max(10.0, (H - ph) * 0.5), pw, ph)
+
+func _cauldron_herb_rect(i: int, pr: Rect2) -> Rect2:
+	return Rect2(pr.position.x + 8.0, pr.position.y + 42.0 + float(i) * 40.0, pr.size.x - 16.0, 36.0)
 
 func _campfire_btn_camp_rect() -> Rect2:
 	var pw := 280.0; var ph := 130.0

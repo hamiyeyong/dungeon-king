@@ -16,6 +16,7 @@ const STATUS_EFFECT_SCENE := preload("res://fx/status_effect.tscn")
 # 물약 색상-효과 매핑 (런마다 셔플)
 var _potion_map: Array[Item.Type] = []
 var _identified: Array[bool] = [false, false, false, false, false, false, false, false, false]
+var _cauldron_is_white := false
 
 # 던지기 타겟팅
 var _throw_mode := false
@@ -120,6 +121,10 @@ func _init_run() -> void:
 		player.door_approached.connect(_on_door_approached)
 	if not player.cauldron_approached.is_connected(_on_cauldron_approached):
 		player.cauldron_approached.connect(_on_cauldron_approached)
+	if not hud.cauldron_material_chosen.is_connected(_on_cauldron_material_chosen):
+		hud.cauldron_material_chosen.connect(_on_cauldron_material_chosen)
+	if not hud.cauldron_picker_cancelled.is_connected(_on_cauldron_picker_cancelled):
+		hud.cauldron_picker_cancelled.connect(_on_cauldron_picker_cancelled)
 	if not player.well_approached.is_connected(_on_well_approached):
 		player.well_approached.connect(_on_well_approached)
 	if not hud.well_item_selected.is_connected(_on_well_item_selected):
@@ -812,8 +817,8 @@ func _on_item_action(idx: int, action: String) -> void:
 				match item.item_type:
 					Item.Type.POTION_POISON: _spawn_poison(player.position)
 					Item.Type.POTION_FIRE:   _spawn_fire(player.position)
-				# 포션 사용 후 빈병 획득
-				if player.inventory.size() < player.MAX_INVENTORY - 1:
+				# 포션 사용 후 50% 확률로 빈병 획득
+				if randf() < 0.5 and player.inventory.size() < player.MAX_INVENTORY:
 					var bottle := Item.new()
 					bottle.item_type = Item.Type.MATERIAL_BOTTLE
 					player.inventory.append(bottle)
@@ -1258,59 +1263,65 @@ func _on_door_approached(tile_pos: Vector2i) -> void:
 
 func _on_cauldron_approached(tile_pos: Vector2i) -> void:
 	var bottle_count: int = 0
-	var mat_count: int = 0
-	for item in player.inventory:
+	var herb_indices: Array[int] = []
+	for i in player.inventory.size():
+		var item: Item = player.inventory[i]
 		if item.item_type == Item.Type.MATERIAL_BOTTLE:
 			bottle_count += 1
-		elif item.is_material():
-			mat_count += 1
-	if bottle_count == 0 or mat_count < 2:
-		hud.add_log("재료가 부족합니다. (빈병 ×1 + 재료 ×2 필요)")
+		elif item.item_type == Item.Type.MATERIAL_HERB or Item.HERB_POTION_MAP.has(item.item_type):
+			herb_indices.append(i)
+	if bottle_count == 0:
+		hud.add_log("빈병이 없습니다. (빈병 ×1 + 약초류 ×1 필요)")
 		enemy_manager.do_turns(player.tile_pos)
 		return
-	var is_white: bool = map.get_cell(tile_pos.x, tile_pos.y) == map.Cell.WHITE_CAULDRON
-	var label := "흰 솥 (좋은 물약)" if is_white else "검은 솥 (나쁜 물약)"
-	hud.show_confirm("연금술 솥 [%s]\n빈병 ×1 + 재료 ×2 소모하여\n물약을 만드시겠습니까?" % label,
-		_on_cauldron_confirmed.bind(is_white), _on_cauldron_cancelled)
+	if herb_indices.is_empty():
+		hud.add_log("약초 재료가 없습니다. (약초류 ×1 + 빈병 ×1 필요)")
+		enemy_manager.do_turns(player.tile_pos)
+		return
+	_cauldron_is_white = map.get_cell(tile_pos.x, tile_pos.y) == map.Cell.WHITE_CAULDRON
+	hud.show_cauldron_picker(herb_indices, _cauldron_is_white)
 
-func _on_cauldron_confirmed(is_white: bool) -> void:
-	# 빈병 1개 제거
+func _on_cauldron_material_chosen(inv_idx: int) -> void:
+	if inv_idx >= player.inventory.size(): return
+	var herb_type: int = player.inventory[inv_idx].item_type
+	player.inventory.remove_at(inv_idx)
 	for i in player.inventory.size():
 		if player.inventory[i].item_type == Item.Type.MATERIAL_BOTTLE:
 			player.inventory.remove_at(i)
 			break
-	# 재료 2개 제거 (아무거나)
-	var removed: int = 0
-	var i: int = player.inventory.size() - 1
-	while i >= 0 and removed < 2:
-		if player.inventory[i].is_material():
-			player.inventory.remove_at(i)
-			removed += 1
-		i -= 1
-	# 물약 생성
 	var result := Item.new()
-	var cidx: int
-	if is_white:
-		var good: Array = [_potion_map.find(Item.Type.POTION_HEAL),
-			_potion_map.find(Item.Type.POTION_HUNGER),
-			_potion_map.find(Item.Type.POTION_CLEANSE)]
-		good = good.filter(func(x): return x >= 0)
-		cidx = good[randi() % good.size()] if not good.is_empty() else randi() % 6
+	var identified := false
+	if Item.HERB_POTION_MAP.has(herb_type):
+		var potion_type: int = Item.HERB_POTION_MAP[herb_type]
+		result.item_type = potion_type
+		var cidx: int = _potion_map.find(potion_type as Item.Type)
+		result.color_idx = cidx if cidx >= 0 else 0
+		if cidx >= 0:
+			_identified[cidx] = true
+		identified = true
 	else:
-		var bad: Array = [_potion_map.find(Item.Type.POTION_POISON),
-			_potion_map.find(Item.Type.POTION_FIRE),
-			_potion_map.find(Item.Type.POTION_SLEEP)]
-		bad = bad.filter(func(x): return x >= 0)
-		cidx = bad[randi() % bad.size()] if not bad.is_empty() else randi() % 6
-	result.item_type = _potion_map[cidx]
-	result.color_idx = cidx
+		var cidx: int
+		if _cauldron_is_white:
+			var good: Array = [_potion_map.find(Item.Type.POTION_HEAL),
+				_potion_map.find(Item.Type.POTION_HUNGER),
+				_potion_map.find(Item.Type.POTION_CLEANSE)]
+			good = good.filter(func(x): return x >= 0)
+			cidx = good[randi() % good.size()] if not good.is_empty() else randi() % 6
+		else:
+			var bad: Array = [_potion_map.find(Item.Type.POTION_POISON),
+				_potion_map.find(Item.Type.POTION_FIRE),
+				_potion_map.find(Item.Type.POTION_SLEEP)]
+			bad = bad.filter(func(x): return x >= 0)
+			cidx = bad[randi() % bad.size()] if not bad.is_empty() else randi() % 6
+		result.item_type = _potion_map[cidx]
+		result.color_idx = cidx
+		identified = _identified[cidx]
 	player.inventory.append(result)
-	var ident: bool = _identified[cidx]
-	hud.add_log("연금술 성공! %s 획득!" % result.get_display_name(ident))
+	hud.add_log("연금술 성공! %s 획득!" % result.get_display_name(identified))
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
 
-func _on_cauldron_cancelled() -> void:
+func _on_cauldron_picker_cancelled() -> void:
 	enemy_manager.do_turns(player.tile_pos)
 
 # ── 이상한 우물 상호작용 ────────────────────────────────────────────────────
