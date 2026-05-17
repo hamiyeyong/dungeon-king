@@ -179,6 +179,8 @@ func get_equip_atk() -> int:
 		return 0
 	var ratio: float = float(max(0, durability)) / float(max(1, max_durability))
 	var total: int = EQUIPMENT_DATA[item_type][1] + (enhance_level if is_weapon() else 0)
+	if is_blessed:
+		total += 1
 	return total if ratio > 0 else (total / 2)
 
 func get_equip_def() -> int:
@@ -186,6 +188,8 @@ func get_equip_def() -> int:
 		return 0
 	var ratio: float = float(max(0, durability)) / float(max(1, max_durability))
 	var total: int = EQUIPMENT_DATA[item_type][2] + (enhance_level if not is_weapon() else 0)
+	if is_blessed:
+		total += 1
 	return total if ratio > 0 else (total / 2)
 
 func get_display_name(identified: bool) -> String:
@@ -308,13 +312,15 @@ func get_atlas() -> Vector2i:
 func apply(player) -> String:
 	match item_type:
 		Type.POTION_HEAL:
-			player.hp = min(player.max_hp, player.hp + 10)
+			var heal: int = 15 if is_blessed else 10
+			player.hp = min(player.max_hp, player.hp + heal) as int
 			player.stats_changed.emit()
-			return "HP +10 회복"
+			return "HP +%d 회복%s" % [heal, " [축복]" if is_blessed else ""]
 		Type.POTION_HUNGER:
-			player.hunger = max(0, player.hunger - 50)
+			var reduce: int = 80 if is_blessed else 50
+			player.hunger = max(0, player.hunger - reduce) as int
 			player.stats_changed.emit()
-			return "배고픔 -50"
+			return "배고픔 -%d%s" % [reduce, " [축복]" if is_blessed else ""]
 		Type.POTION_POISON:
 			player.apply_status("poison", POISON_TURNS)
 			player.stats_changed.emit()
@@ -336,9 +342,10 @@ func apply(player) -> String:
 			player.stats_changed.emit()
 			return "수면 상태이상! (%d턴)" % SLEEP_TURNS
 		Type.FOOD:
-			player.hunger = max(0, player.hunger - 30)
+			var reduce: int = 50 if is_blessed else 30
+			player.hunger = max(0, player.hunger - reduce) as int
 			player.stats_changed.emit()
-			return "배고픔 -30"
+			return "식량 섭취! 배고픔 -%d%s" % [reduce, " [축복]" if is_blessed else ""]
 		Type.COOKED_FOOD:
 			player.hunger = max(0, player.hunger - 60)
 			player.stats_changed.emit()
@@ -348,6 +355,13 @@ func apply(player) -> String:
 			player.apply_status("poison", POISON_TURNS)
 			player.stats_changed.emit()
 			return "상한 식량 섭취! 배고픔 -20, 독 상태이상!"
+		Type.MATERIAL_RAW_MEAT:
+			player.hunger = max(0, player.hunger - 20) as int
+			player.stats_changed.emit()
+			if randf() < 0.3:
+				player.apply_status("poison", POISON_TURNS)
+				return "생고기 섭취! 배고픔 -20, 독 상태이상!"
+			return "생고기 섭취! 배고픔 -20"
 		Type.TOOL_REPAIR:
 			var target: Item = null
 			var lowest: float = 1.0

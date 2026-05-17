@@ -61,6 +61,7 @@ var curse_atk: int = 0
 var exp := 0
 var level := 1
 var gold: int = 0
+var turn_num: int = 0
 var next_atk_multiplier: int = 1   # 강타 주문서 효과 (사용 후 다음 공격 배수)
 
 var inventory: Array[Item] = []
@@ -580,6 +581,7 @@ func _update_anim(dir: Vector2i) -> void:
 	sprite.play(_last_walk_anim)
 
 func _on_step(consume_hunger: bool = true) -> void:
+	turn_num += 1
 	if consume_hunger:
 		hunger = min(600, hunger + 1)
 		if hunger >= 600:

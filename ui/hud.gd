@@ -95,6 +95,7 @@ var _class_skill_label: String = "스킬"
 var _class_skill_mp: int = 30  # 플레이어 현재 MP (그레이아웃 판단용)
 
 var gold: int = 0
+var turn_num: int = 0
 
 var _status_poison: int = 0
 var _status_fire: int = 0
@@ -122,13 +123,14 @@ func update_status(p_poison: int, p_fire: int, p_sleep: int,
 
 func update_stats(p_hp: int, p_max_hp: int, p_mp: int, p_max_mp: int,
 		p_hunger: int, p_fatigue: int, p_floor: int,
-		p_level: int = 1, p_atk: int = 5, p_def: int = 1, p_gold: int = 0) -> void:
+		p_level: int = 1, p_atk: int = 5, p_def: int = 1, p_gold: int = 0, p_turn: int = 0) -> void:
 	hp = p_hp; max_hp = p_max_hp
 	mp = p_mp; max_mp = p_max_mp
 	hunger = p_hunger; fatigue = p_fatigue
 	floor_num = p_floor; level = p_level
 	atk = p_atk; def_ = p_def
 	gold = p_gold
+	turn_num = p_turn
 	queue_redraw()
 
 func update_inventory(items: Array[Item], identified: Array) -> void:
@@ -545,7 +547,7 @@ func _draw_top_left() -> void:
 	var bar_w := 190
 	var bar_h := 11
 	var gap := 4
-	var panel_h := pad * 2 + 18 + (bar_h + gap) * 3 + 14 + 16
+	var panel_h := pad * 2 + 18 + (bar_h + gap) * 3 + 14 + 16 + 14
 	draw_rect(Rect2(0, 0, bar_w + pad * 2 + 4, panel_h), Color(0, 0, 0, 0.55))
 
 	var hx := pad + 4
@@ -585,6 +587,10 @@ func _draw_top_left() -> void:
 	hy += 16
 	draw_string(font, Vector2(hx, hy + 10), "💰 %d G" % gold,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("#f0d060"))
+
+	hy += 14
+	draw_string(font, Vector2(hx, hy + 10), "T.%d  (AP 20/턴)" % turn_num,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("#888888"))
 
 	# 상태이상 표시
 	var statuses: Array[Dictionary] = []
