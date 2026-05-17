@@ -14,6 +14,12 @@ const BAG_W    := 58   # 가방 버튼 폭
 const EQUIP_GAP := 4
 const INV_COUNT := 20
 const MERCHANT_MAX_VISIBLE := 8
+const CRAFT_MAX_VISIBLE    := 6   # 장비/기타 탭 행 수 (40px rows)
+const CRAFT_HERB_MAX_VIS   := 9   # 물약 탭 행 수 (28px rows)
+const WELL_MAX_VISIBLE     := 6
+const COOK_MAX_VISIBLE     := 5
+const CAULDRON_MAX_VISIBLE := 7
+const SPELL_MAX_VISIBLE    := 7
 
 # 가방 팝업 내 슬롯 크기
 const BAG_EQUIP_SZ := 60
@@ -93,6 +99,12 @@ var _merchant_sell_mode := false
 var _merchant_shop_items: Array[Dictionary] = []   # {item, price, sold}
 var _merchant_sell_prices: Array[int] = []
 var _merchant_scroll_offset: int = 0
+
+var _craft_scroll_offset: int = 0
+var _well_scroll_offset: int = 0
+var _cook_scroll_offset: int = 0
+var _cauldron_scroll_offset: int = 0
+var _spell_scroll_offset: int = 0
 
 var _well_popup_visible := false
 var _well_popup_indices: Array[int] = []   # 우물에 바칠 수 있는 인벤 인덱스
@@ -201,6 +213,7 @@ func is_any_popup_open() -> bool:
 func show_cauldron_picker(herb_inv_indices: Array[int], is_white: bool) -> void:
 	_cauldron_herb_indices = herb_inv_indices
 	_cauldron_is_white = is_white
+	_cauldron_scroll_offset = 0
 	_cauldron_picker_visible = true
 	queue_redraw()
 
@@ -211,12 +224,14 @@ func set_throw_mode(active: bool) -> void:
 func show_spell_popup(spells: Array) -> void:
 	_spell_popup_list = spells
 	_spell_popup_enhance_mode = false
+	_spell_scroll_offset = 0
 	_spell_popup_visible = true
 	queue_redraw()
 
 func show_spell_enhance_popup(spells: Array) -> void:
 	_spell_popup_list = spells
 	_spell_popup_enhance_mode = true
+	_spell_scroll_offset = 0
 	_spell_popup_visible = true
 	queue_redraw()
 
@@ -228,6 +243,7 @@ func close_spell_popup() -> void:
 
 func show_well_popup(inv_indices: Array[int]) -> void:
 	_well_popup_indices = inv_indices
+	_well_scroll_offset = 0
 	_well_popup_visible = true
 	queue_redraw()
 
@@ -254,6 +270,7 @@ func show_campfire_popup() -> void:
 
 func show_cook_popup(food_indices: Array[int]) -> void:
 	_cook_popup_indices = food_indices
+	_cook_scroll_offset = 0
 	_cook_popup_visible = true
 	queue_redraw()
 
@@ -298,9 +315,23 @@ func _input(event: InputEvent) -> void:
 	if _cook_popup_visible:
 		var cook_pr := _cook_popup_rect()
 		if cook_pr.has_point(p):
-			for i in _cook_popup_indices.size():
-				if _cook_item_rect(i, cook_pr).has_point(p):
-					var inv_idx: int = _cook_popup_indices[i]
+			if _scroll_btn_up_rect(cook_pr).has_point(p):
+				if _cook_scroll_offset > 0:
+					_cook_scroll_offset -= 1
+					queue_redraw()
+				get_viewport().set_input_as_handled()
+				return
+			if _scroll_btn_down_rect(cook_pr).has_point(p):
+				if _cook_scroll_offset + COOK_MAX_VISIBLE < _cook_popup_indices.size():
+					_cook_scroll_offset += 1
+					queue_redraw()
+				get_viewport().set_input_as_handled()
+				return
+			for display_i in COOK_MAX_VISIBLE:
+				var real_i: int = display_i + _cook_scroll_offset
+				if real_i >= _cook_popup_indices.size(): break
+				if _cook_item_rect(display_i, cook_pr).has_point(p):
+					var inv_idx: int = _cook_popup_indices[real_i]
 					_cook_popup_visible = false
 					queue_redraw()
 					campfire_cook_selected.emit(inv_idx)
@@ -314,9 +345,23 @@ func _input(event: InputEvent) -> void:
 	if _well_popup_visible:
 		var wpr := _well_popup_rect()
 		if wpr.has_point(p):
-			for i in _well_popup_indices.size():
-				if _well_item_rect(i, wpr).has_point(p):
-					var inv_idx: int = _well_popup_indices[i]
+			if _scroll_btn_up_rect(wpr).has_point(p):
+				if _well_scroll_offset > 0:
+					_well_scroll_offset -= 1
+					queue_redraw()
+				get_viewport().set_input_as_handled()
+				return
+			if _scroll_btn_down_rect(wpr).has_point(p):
+				if _well_scroll_offset + WELL_MAX_VISIBLE < _well_popup_indices.size():
+					_well_scroll_offset += 1
+					queue_redraw()
+				get_viewport().set_input_as_handled()
+				return
+			for display_i in WELL_MAX_VISIBLE:
+				var real_i: int = display_i + _well_scroll_offset
+				if real_i >= _well_popup_indices.size(): break
+				if _well_item_rect(display_i, wpr).has_point(p):
+					var inv_idx: int = _well_popup_indices[real_i]
 					_well_popup_visible = false
 					queue_redraw()
 					well_item_selected.emit(inv_idx)
@@ -398,9 +443,23 @@ func _input(event: InputEvent) -> void:
 	if _spell_popup_visible:
 		var spr := _spell_popup_rect()
 		if spr.has_point(p):
-			for i in _spell_popup_list.size():
-				if _spell_item_rect(i, spr).has_point(p):
-					var sd: Dictionary = _spell_popup_list[i]
+			if _scroll_btn_up_rect(spr).has_point(p):
+				if _spell_scroll_offset > 0:
+					_spell_scroll_offset -= 1
+					queue_redraw()
+				get_viewport().set_input_as_handled()
+				return
+			if _scroll_btn_down_rect(spr).has_point(p):
+				if _spell_scroll_offset + SPELL_MAX_VISIBLE < _spell_popup_list.size():
+					_spell_scroll_offset += 1
+					queue_redraw()
+				get_viewport().set_input_as_handled()
+				return
+			for display_i in SPELL_MAX_VISIBLE:
+				var real_i: int = display_i + _spell_scroll_offset
+				if real_i >= _spell_popup_list.size(): break
+				if _spell_item_rect(display_i, spr).has_point(p):
+					var sd: Dictionary = _spell_popup_list[real_i]
 					var is_enhance: bool = _spell_popup_enhance_mode
 					_spell_popup_visible = false
 					_spell_popup_list = []
@@ -425,9 +484,23 @@ func _input(event: InputEvent) -> void:
 	if _cauldron_picker_visible:
 		var cpr := _cauldron_picker_rect()
 		if cpr.has_point(p):
-			for i in _cauldron_herb_indices.size():
-				if _cauldron_herb_rect(i, cpr).has_point(p):
-					var inv_idx: int = _cauldron_herb_indices[i]
+			if _scroll_btn_up_rect(cpr).has_point(p):
+				if _cauldron_scroll_offset > 0:
+					_cauldron_scroll_offset -= 1
+					queue_redraw()
+				get_viewport().set_input_as_handled()
+				return
+			if _scroll_btn_down_rect(cpr).has_point(p):
+				if _cauldron_scroll_offset + CAULDRON_MAX_VISIBLE < _cauldron_herb_indices.size():
+					_cauldron_scroll_offset += 1
+					queue_redraw()
+				get_viewport().set_input_as_handled()
+				return
+			for display_i in CAULDRON_MAX_VISIBLE:
+				var real_i: int = display_i + _cauldron_scroll_offset
+				if real_i >= _cauldron_herb_indices.size(): break
+				if _cauldron_herb_rect(display_i, cpr).has_point(p):
+					var inv_idx: int = _cauldron_herb_indices[real_i]
 					_cauldron_picker_visible = false
 					_cauldron_herb_indices = []
 					queue_redraw()
@@ -447,17 +520,41 @@ func _input(event: InputEvent) -> void:
 			for t in 3:
 				if _craft_tab_rect(t, pr).has_point(p):
 					_craft_tab = t
+					_craft_scroll_offset = 0
 					queue_redraw()
 					get_viewport().set_input_as_handled()
 					return
+			# 스크롤 버튼
+			var cup := _scroll_btn_up_rect(pr)
+			var cdn := _scroll_btn_down_rect(pr)
+			if cup.has_point(p):
+				if _craft_scroll_offset > 0:
+					_craft_scroll_offset -= 1
+					queue_redraw()
+				get_viewport().set_input_as_handled()
+				return
+			if cdn.has_point(p):
+				var total: int = _craft_scroll_total()
+				var max_vis: int = CRAFT_HERB_MAX_VIS if _craft_tab == 1 else CRAFT_MAX_VISIBLE
+				if _craft_scroll_offset + max_vis < total:
+					_craft_scroll_offset += 1
+					queue_redraw()
+				get_viewport().set_input_as_handled()
+				return
 			if _craft_tab != 1:
-				var row := 0
+				var abs_row := 0
+				var display_row := 0
 				for i in Item.RECIPES.size():
 					var recipe: Array = Item.RECIPES[i]
 					var in_tab := (_craft_tab == 0 and Item.EQUIPMENT_DATA.has(recipe[0])) or \
 						(_craft_tab == 2 and not Item.EQUIPMENT_DATA.has(recipe[0]))
 					if in_tab:
-						if _craft_content_row_rect(row, pr).has_point(p):
+						if abs_row < _craft_scroll_offset:
+							abs_row += 1
+							continue
+						if display_row >= CRAFT_MAX_VISIBLE:
+							break
+						if _craft_content_row_rect(display_row, pr).has_point(p):
 							if _can_craft(i):
 								_craft_visible = false
 								queue_redraw()
@@ -466,7 +563,8 @@ func _input(event: InputEvent) -> void:
 								add_log("재료가 부족합니다.")
 							get_viewport().set_input_as_handled()
 							return
-						row += 1
+						display_row += 1
+						abs_row += 1
 		else:
 			_craft_visible = false
 		queue_redraw()
@@ -601,6 +699,7 @@ func _input(event: InputEvent) -> void:
 	# 제작
 	if _skill_slot_rect(1).has_point(p):
 		_craft_visible = true
+		_craft_scroll_offset = 0
 		queue_redraw()
 		get_viewport().set_input_as_handled()
 		return
@@ -971,17 +1070,20 @@ func _draw_cook_popup() -> void:
 	draw_rect(pr, Color(0.85, 0.5, 0.1, 0.75), false, 1.5)
 	draw_string(font, Vector2(pr.position.x, pr.position.y + 22),
 		"요리  (모닥불)", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 13, Color("#f0a030"))
-	for i in _cook_popup_indices.size():
-		var inv_idx: int = _cook_popup_indices[i]
+	for display_i in COOK_MAX_VISIBLE:
+		var real_i: int = display_i + _cook_scroll_offset
+		if real_i >= _cook_popup_indices.size(): break
+		var inv_idx: int = _cook_popup_indices[real_i]
 		var item: Item = _inventory_items[inv_idx]
-		var r := _cook_item_rect(i, pr)
+		var r := _cook_item_rect(display_i, pr)
 		draw_rect(r, Color(0.2, 0.14, 0.06, 0.92))
 		draw_rect(r, Color(0.7, 0.42, 0.1, 0.7), false)
 		draw_string(font, Vector2(r.position.x, r.position.y + r.size.y * 0.5 + 5),
 			item.get_display_name(true), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 11,
 			Color(0.95, 0.85, 0.6))
+	_draw_scroll_btns(pr, _cook_scroll_offset, _cook_popup_indices.size(), COOK_MAX_VISIBLE)
 	draw_string(font, Vector2(pr.position.x, pr.end.y - 7),
-		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.32, 0.32, 0.35))
+		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 120, 8, Color(0.32, 0.32, 0.35))
 
 func _draw_craft_popup() -> void:
 	var font := ThemeDB.fallback_font
@@ -1000,27 +1102,41 @@ func _draw_craft_popup() -> void:
 		draw_string(font, Vector2(tr.position.x, tr.position.y + tr.size.y * 0.5 + 5),
 			tab_names[t], HORIZONTAL_ALIGNMENT_CENTER, tr.size.x, 11,
 			Color(0.9, 1.0, 0.9) if active else Color(0.55, 0.65, 0.55))
-	if _craft_tab == 0:
-		var row := 0
+	if _craft_tab == 0 or _craft_tab == 2:
+		var abs_row := 0
+		var display_row := 0
 		for i in Item.RECIPES.size():
 			var recipe: Array = Item.RECIPES[i]
-			if not Item.EQUIPMENT_DATA.has(recipe[0]): continue
+			var in_tab: bool = (_craft_tab == 0 and Item.EQUIPMENT_DATA.has(recipe[0])) or \
+				(_craft_tab == 2 and not Item.EQUIPMENT_DATA.has(recipe[0]))
+			if not in_tab: continue
+			if abs_row < _craft_scroll_offset:
+				abs_row += 1
+				continue
+			if display_row >= CRAFT_MAX_VISIBLE: break
 			var can: bool = _can_craft(i)
-			var r := _craft_content_row_rect(row, pr)
+			var r := _craft_content_row_rect(display_row, pr)
 			draw_rect(r, Color(0.12, 0.22, 0.12, 0.9) if can else Color(0.10, 0.10, 0.10, 0.7))
 			draw_rect(r, Color(0.4, 0.65, 0.4, 0.75) if can else Color(0.25, 0.25, 0.25, 0.4), false)
-			var eq: Array = Item.EQUIPMENT_DATA[recipe[0]]
-			var stat := "ATK+%d" % eq[1] if eq[1] > 0 else "DEF+%d" % eq[2]
-			var label := "%s(%s) ← %s" % [eq[0], stat, _recipe_mat_str(i, can)]
-			draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
-				label, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 12, 11,
-				Color(0.9, 1.0, 0.85) if can else Color(0.5, 0.5, 0.5))
-			row += 1
-	elif _craft_tab == 1:
+			if _craft_tab == 0:
+				var eq: Array = Item.EQUIPMENT_DATA[recipe[0]]
+				var stat := "ATK+%d" % eq[1] if eq[1] > 0 else "DEF+%d" % eq[2]
+				var label := "%s(%s) ← %s" % [eq[0], stat, _recipe_mat_str(i, can)]
+				draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
+					label, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 12, 11,
+					Color(0.9, 1.0, 0.85) if can else Color(0.5, 0.5, 0.5))
+			else:
+				var label := "%s ← %s" % [Item.get_type_name(recipe[0]), _recipe_mat_str(i, can)]
+				draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
+					label, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 12, 11,
+					Color(0.9, 1.0, 0.85) if can else Color(0.5, 0.5, 0.5))
+			display_row += 1
+			abs_row += 1
+	else:  # tab 1 (herbs)
 		draw_string(font, Vector2(pr.position.x, pr.position.y + 54),
-			"연금술 솥에서만 제작 가능합니다", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 10, Color(0.7, 0.8, 0.5))
+			"연금술 솥에서만 제작 가능합니다", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 120, 10, Color(0.7, 0.8, 0.5))
 		var herbs: Array = [
-			[Item.Type.MATERIAL_HERB,           "약초",           "랜덤 물약"],
+			[Item.Type.MATERIAL_HERB,             "약초",           "랜덤 물약"],
 			[Item.Type.MATERIAL_HERB_BLOOD_MOSS,  "말린 피이끼",   "회복 물약"],
 			[Item.Type.MATERIAL_HERB_GINSENG,     "산삼 뿌리",     "포만 물약"],
 			[Item.Type.MATERIAL_HERB_AMBROSIA,    "암브로시아 꽃", "회복 물약"],
@@ -1032,33 +1148,22 @@ func _draw_craft_popup() -> void:
 			[Item.Type.MATERIAL_HERB_ICE,         "식은 얼음송이", "수면 물약"],
 			[Item.Type.MATERIAL_HERB_GARLIC,      "생마늘",        "정화 물약"],
 		]
-		for i in herbs.size():
-			var r := _craft_content_row_rect_compact(i, pr)
-			var have: int = _count_mat(herbs[i][0])
+		for display_i in CRAFT_HERB_MAX_VIS:
+			var real_i: int = display_i + _craft_scroll_offset
+			if real_i >= herbs.size(): break
+			var r := _craft_content_row_rect_compact(display_i, pr)
+			var have: int = _count_mat(herbs[real_i][0])
 			draw_rect(r, Color(0.08, 0.14, 0.08, 0.85))
 			draw_rect(r, Color(0.3, 0.55, 0.3, 0.5), false)
 			var lc := Color(0.85, 1.0, 0.85) if have > 0 else Color(0.45, 0.55, 0.45)
 			draw_string(font, Vector2(r.position.x + 6, r.position.y + r.size.y * 0.5 + 5),
-				herbs[i][1] + "+빈병", HORIZONTAL_ALIGNMENT_LEFT, r.size.x * 0.58 - 6, 10, lc)
+				herbs[real_i][1] + "+빈병", HORIZONTAL_ALIGNMENT_LEFT, r.size.x * 0.58 - 6, 10, lc)
 			draw_string(font, Vector2(r.position.x + r.size.x * 0.58, r.position.y + r.size.y * 0.5 + 5),
-				"→ " + herbs[i][2], HORIZONTAL_ALIGNMENT_LEFT, r.size.x * 0.42 - 6, 10,
+				"→ " + herbs[real_i][2], HORIZONTAL_ALIGNMENT_LEFT, r.size.x * 0.42 - 6, 10,
 				Color(0.7, 0.9, 0.7) if have > 0 else Color(0.4, 0.5, 0.4))
-	else:
-		var row := 0
-		for i in Item.RECIPES.size():
-			var recipe: Array = Item.RECIPES[i]
-			if Item.EQUIPMENT_DATA.has(recipe[0]): continue
-			var can: bool = _can_craft(i)
-			var r := _craft_content_row_rect(row, pr)
-			draw_rect(r, Color(0.12, 0.22, 0.12, 0.9) if can else Color(0.10, 0.10, 0.10, 0.7))
-			draw_rect(r, Color(0.4, 0.65, 0.4, 0.75) if can else Color(0.25, 0.25, 0.25, 0.4), false)
-			var label := "%s ← %s" % [Item.get_type_name(recipe[0]), _recipe_mat_str(i, can)]
-			draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
-				label, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 12, 11,
-				Color(0.9, 1.0, 0.85) if can else Color(0.5, 0.5, 0.5))
-			row += 1
+	_draw_scroll_btns(pr, _craft_scroll_offset, _craft_scroll_total(), CRAFT_HERB_MAX_VIS if _craft_tab == 1 else CRAFT_MAX_VISIBLE)
 	draw_string(font, Vector2(pr.position.x, pr.end.y - 7),
-		"영역 밖 터치로 닫기", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.35, 0.35, 0.35))
+		"영역 밖 터치로 닫기", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 120, 8, Color(0.35, 0.35, 0.35))
 
 func _draw_cauldron_picker() -> void:
 	var font := ThemeDB.fallback_font
@@ -1071,11 +1176,13 @@ func _draw_cauldron_picker() -> void:
 		title, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 13, Color("#80c8ff"))
 	draw_string(font, Vector2(pr.position.x, pr.position.y + 36),
 		"빈병 ×1 + 선택 재료 ×1 소모", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 10, Color(0.55, 0.6, 0.65))
-	for i in _cauldron_herb_indices.size():
-		var inv_idx: int = _cauldron_herb_indices[i]
+	for display_i in CAULDRON_MAX_VISIBLE:
+		var real_i: int = display_i + _cauldron_scroll_offset
+		if real_i >= _cauldron_herb_indices.size(): break
+		var inv_idx: int = _cauldron_herb_indices[real_i]
 		if inv_idx >= _inventory_items.size(): continue
 		var herb: Item = _inventory_items[inv_idx]
-		var r := _cauldron_herb_rect(i, pr)
+		var r := _cauldron_herb_rect(display_i, pr)
 		draw_rect(r, Color(0.1, 0.18, 0.28, 0.9))
 		draw_rect(r, Color(0.4, 0.55, 0.8, 0.6), false)
 		var result_str: String
@@ -1086,8 +1193,9 @@ func _draw_cauldron_picker() -> void:
 		draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
 			Item.get_type_name(herb.item_type) + result_str,
 			HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 12, 11, Color(0.9, 0.95, 1.0))
+	_draw_scroll_btns(pr, _cauldron_scroll_offset, _cauldron_herb_indices.size(), CAULDRON_MAX_VISIBLE)
 	draw_string(font, Vector2(pr.position.x, pr.end.y - 7),
-		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.35, 0.35, 0.35))
+		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 120, 8, Color(0.35, 0.35, 0.35))
 
 func _potion_type_name(potion_type: int) -> String:
 	match potion_type:
@@ -1276,6 +1384,30 @@ func _merchant_scroll_up_rect(pr: Rect2) -> Rect2:
 func _merchant_scroll_down_rect(pr: Rect2) -> Rect2:
 	return Rect2(pr.position.x + 188, pr.end.y - 36, 50, 28)
 
+# 공용 스크롤 버튼: ▲ / ▼ (팝업 하단 우측 정렬)
+func _scroll_btn_up_rect(pr: Rect2) -> Rect2:
+	return Rect2(pr.end.x - 116, pr.end.y - 36, 52, 28)
+
+func _scroll_btn_down_rect(pr: Rect2) -> Rect2:
+	return Rect2(pr.end.x - 60, pr.end.y - 36, 52, 28)
+
+func _draw_scroll_btns(pr: Rect2, offset: int, total: int, max_vis: int) -> void:
+	var font := ThemeDB.fallback_font
+	var can_up: bool = offset > 0
+	var can_dn: bool = offset + max_vis < total
+	var ub := _scroll_btn_up_rect(pr)
+	var db := _scroll_btn_down_rect(pr)
+	for btn in [ub, db]:
+		var active: bool = btn == ub and can_up or btn == db and can_dn
+		draw_rect(btn, Color(0.18, 0.22, 0.32, 0.9) if active else Color(0.1, 0.1, 0.12, 0.5))
+		draw_rect(btn, Color(0.45, 0.55, 0.7, 0.6) if active else Color(0.22, 0.22, 0.26, 0.4), false)
+	draw_string(font, Vector2(ub.position.x, ub.position.y + ub.size.y * 0.5 + 5),
+		"▲ 위", HORIZONTAL_ALIGNMENT_CENTER, ub.size.x, 9,
+		Color.WHITE if can_up else Color(0.35, 0.35, 0.35))
+	draw_string(font, Vector2(db.position.x, db.position.y + db.size.y * 0.5 + 5),
+		"▼ 아래", HORIZONTAL_ALIGNMENT_CENTER, db.size.x, 9,
+		Color.WHITE if can_dn else Color(0.35, 0.35, 0.35))
+
 func _equip_action_unequip_rect() -> Rect2:
 	var pw := 180.0; var ph := 90.0
 	var px := (W - pw) * 0.5; var py := (H - ph) * 0.5
@@ -1304,21 +1436,18 @@ func _bag_inv_slot_rect(i: int) -> Rect2:
 
 func _craft_popup_rect() -> Rect2:
 	var pw := 314.0
-	var content_h: float
-	if _craft_tab == 0:
-		var n := 0
-		for r in Item.RECIPES:
-			if Item.EQUIPMENT_DATA.has(r[0]): n += 1
-		content_h = float(max(1, n)) * 40.0
-	elif _craft_tab == 1:
-		content_h = 18.0 + 11.0 * 28.0
-	else:
-		var n := 0
-		for r in Item.RECIPES:
-			if not Item.EQUIPMENT_DATA.has(r[0]): n += 1
-		content_h = float(max(1, n)) * 40.0
-	var ph := 50.0 + content_h + 20.0
+	var ph := 360.0
 	return Rect2((W - pw) * 0.5, (H - ph) * 0.5, pw, ph)
+
+func _craft_scroll_total() -> int:
+	var n := 0
+	if _craft_tab == 1:
+		return 11
+	for r in Item.RECIPES:
+		var in_tab: bool = (_craft_tab == 0 and Item.EQUIPMENT_DATA.has(r[0])) or \
+			(_craft_tab == 2 and not Item.EQUIPMENT_DATA.has(r[0]))
+		if in_tab: n += 1
+	return n
 
 func _craft_tab_rect(t: int, pr: Rect2) -> Rect2:
 	var tab_w := (pr.size.x - 12.0) / 3.0
@@ -1332,9 +1461,8 @@ func _craft_content_row_rect_compact(row: int, pr: Rect2) -> Rect2:
 
 func _cauldron_picker_rect() -> Rect2:
 	var pw := 300.0
-	var count: int = max(1, _cauldron_herb_indices.size())
-	var ph := 46.0 + float(count) * 40.0 + 20.0
-	return Rect2((W - pw) * 0.5, max(10.0, (H - ph) * 0.5), pw, ph)
+	var ph := 360.0
+	return Rect2((W - pw) * 0.5, (H - ph) * 0.5, pw, ph)
 
 func _cauldron_herb_rect(i: int, pr: Rect2) -> Rect2:
 	return Rect2(pr.position.x + 8.0, pr.position.y + 42.0 + float(i) * 40.0, pr.size.x - 16.0, 36.0)
@@ -1351,8 +1479,8 @@ func _campfire_btn_cook_rect() -> Rect2:
 
 func _cook_popup_rect() -> Rect2:
 	var pw := 260.0
-	var count: int = max(1, _cook_popup_indices.size())
-	var ph := 38.0 + count * 40.0 + 18.0
+	var visible: int = min(_cook_popup_indices.size(), COOK_MAX_VISIBLE)
+	var ph := 38.0 + float(max(1, visible)) * 40.0 + 46.0
 	return Rect2((W - pw) * 0.5, (H - ph) * 0.5, pw, ph)
 
 func _cook_item_rect(i: int, pr: Rect2) -> Rect2:
@@ -1375,9 +1503,9 @@ func _can_craft(recipe_idx: int) -> bool:
 # ── Magic Well Popup ───────────────────────────────────────────────────────
 
 func _well_popup_rect() -> Rect2:
-	var count: int = max(1, _well_popup_indices.size())
-	var ph := 40.0 + count * 40.0 + 18.0
 	var pw := 280.0
+	var visible: int = min(_well_popup_indices.size(), WELL_MAX_VISIBLE)
+	var ph := 40.0 + float(max(1, visible)) * 40.0 + 46.0
 	return Rect2((W - pw) * 0.5, (H - ph) * 0.5, pw, ph)
 
 func _well_item_rect(i: int, pr: Rect2) -> Rect2:
@@ -1392,14 +1520,15 @@ func _draw_well_popup() -> void:
 	draw_string(font, Vector2(pr.position.x, pr.position.y + 22),
 		"🌀 이상한 우물 — 바칠 아이템",
 		HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 12, Color("#80c0ff"))
-	for i in _well_popup_indices.size():
-		var inv_idx: int = _well_popup_indices[i]
-		if inv_idx >= _inventory_items.size():
-			continue
+	for display_i in WELL_MAX_VISIBLE:
+		var real_i: int = display_i + _well_scroll_offset
+		if real_i >= _well_popup_indices.size(): break
+		var inv_idx: int = _well_popup_indices[real_i]
+		if inv_idx >= _inventory_items.size(): continue
 		var item: Item = _inventory_items[inv_idx]
 		var identified: bool = item.color_idx < _inventory_identified.size() \
 			and _inventory_identified[item.color_idx]
-		var r := _well_item_rect(i, pr)
+		var r := _well_item_rect(display_i, pr)
 		draw_rect(r, Color(0.1, 0.15, 0.25, 0.85))
 		draw_rect(r, Color(0.25, 0.4, 0.65, 0.7), false)
 		var atlas: Vector2i = item.get_atlas()
@@ -1407,8 +1536,9 @@ func _draw_well_popup() -> void:
 		draw_texture_rect_region(TILESET, Rect2(r.position + Vector2(4, 7), Vector2(22, 22)), src, item.get_modulate())
 		draw_string(font, Vector2(r.position.x + 32, r.position.y + r.size.y * 0.5 + 5),
 			item.get_display_name(identified), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 40, 10, Color.WHITE)
+	_draw_scroll_btns(pr, _well_scroll_offset, _well_popup_indices.size(), WELL_MAX_VISIBLE)
 	draw_string(font, Vector2(pr.position.x, pr.end.y - 8),
-		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.32, 0.32, 0.35))
+		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 120, 8, Color(0.32, 0.32, 0.35))
 
 # ── Merchant Popup ─────────────────────────────────────────────────────────
 
@@ -1537,9 +1667,9 @@ func _draw_merchant_popup() -> void:
 # ── Spell Popup ────────────────────────────────────────────────────────────
 
 func _spell_popup_rect() -> Rect2:
-	var count: int = max(1, _spell_popup_list.size())
-	var ph := 40.0 + count * 36.0 + 18.0
 	var pw := 240.0
+	var visible: int = min(_spell_popup_list.size(), SPELL_MAX_VISIBLE)
+	var ph := 40.0 + float(max(1, visible)) * 36.0 + 46.0
 	return Rect2((W - pw) * 0.5, (H - ph) * 0.5, pw, ph)
 
 func _spell_item_rect(i: int, pr: Rect2) -> Rect2:
@@ -1557,9 +1687,11 @@ func _draw_spell_popup() -> void:
 	if _spell_popup_list.is_empty():
 		draw_string(font, Vector2(pr.position.x, pr.position.y + 50),
 			"배운 마법이 없습니다.", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 11, Color(0.55, 0.55, 0.55))
-	for i in _spell_popup_list.size():
-		var d: Dictionary = _spell_popup_list[i]
-		var r := _spell_item_rect(i, pr)
+	for display_i in SPELL_MAX_VISIBLE:
+		var real_i: int = display_i + _spell_scroll_offset
+		if real_i >= _spell_popup_list.size(): break
+		var d: Dictionary = _spell_popup_list[real_i]
+		var r := _spell_item_rect(display_i, pr)
 		draw_rect(r, Color(0.10, 0.10, 0.28, 0.9))
 		draw_rect(r, Color(0.28, 0.28, 0.72, 0.7), false)
 		draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
@@ -1571,5 +1703,6 @@ func _draw_spell_popup() -> void:
 		else:
 			draw_string(font, Vector2(r.position.x, r.position.y + r.size.y * 0.5 + 5),
 				"MP %d" % d.mp_cost, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 8, 10, Color("#66ccff"))
+	_draw_scroll_btns(pr, _spell_scroll_offset, _spell_popup_list.size(), SPELL_MAX_VISIBLE)
 	draw_string(font, Vector2(pr.position.x, pr.end.y - 8),
-		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.32, 0.32, 0.35))
+		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 120, 8, Color(0.32, 0.32, 0.35))
