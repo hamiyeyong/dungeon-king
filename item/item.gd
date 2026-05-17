@@ -21,6 +21,7 @@ enum Type {
 	ANCIENT_SCROLL_REGENERATION,
 	ANCIENT_SCROLL_BARK_ARMOR,
 	ANCIENT_SCROLL_DISPEL,
+	MATERIAL_HERO_STONE,
 }
 
 # 포션 색상별 스프라이트 (플레이어가 보는 것)
@@ -113,11 +114,13 @@ static func get_type_name(t: int) -> String:
 		Type.MATERIAL_ARROW_WOOD:        return "나무 화살"
 		Type.TOOL_REPAIR:                return "수리도구"
 		Type.FOOD_ROTTEN:                return "상한 식량"
+		Type.MATERIAL_HERO_STONE:        return "영웅의 돌"
 		Type.ANCIENT_SCROLL_MAGIC_MISSILE:    return "고대 주문서: 매직 미사일"
 		Type.ANCIENT_SCROLL_NATURE_LIGHTNING: return "고대 주문서: 자연의 번개"
 		Type.ANCIENT_SCROLL_REGENERATION:     return "고대 주문서: 재생"
 		Type.ANCIENT_SCROLL_BARK_ARMOR:       return "고대 주문서: 나무껍질 갑옷"
 		Type.ANCIENT_SCROLL_DISPEL:           return "고대 주문서: 디스펠"
+		Type.MATERIAL_HERO_STONE:             return "영웅의 돌"
 	return "?"
 
 const POISON_DMG_PER_TURN := 2
@@ -141,7 +144,7 @@ func is_equipment() -> bool:
 
 func is_material() -> bool:
 	return (item_type >= Type.MATERIAL_BRANCH and item_type <= Type.MATERIAL_HERB_DREAMGRASS) \
-		or item_type == Type.MATERIAL_DART or item_type == Type.MATERIAL_ARROW_WOOD
+		or item_type in [Type.MATERIAL_DART, Type.MATERIAL_ARROW_WOOD, Type.MATERIAL_HERO_STONE]
 
 func is_weapon() -> bool:
 	return item_type in [Type.WEAPON_WOOD, Type.WEAPON_STONE, Type.WEAPON_IRON,
@@ -299,6 +302,7 @@ func get_atlas() -> Vector2i:
 		Type.MATERIAL_DART:            return Vector2i(1, 7)
 		Type.MATERIAL_ARROW_WOOD:      return Vector2i(1, 7)
 		Type.TOOL_REPAIR:              return Vector2i(1, 7)
+		Type.MATERIAL_HERO_STONE:      return Vector2i(7, 9)
 	return COLOR_ATLAS[color_idx]
 
 func apply(player) -> String:

@@ -31,6 +31,7 @@ signal merchant_sell(inv_idx: int)
 signal well_item_selected(inv_idx: int)
 signal spell_slot_tapped
 signal spell_selected(spell_id: String)
+signal spell_enhance_selected(spell_id: String)
 signal class_skill_tapped
 
 var hp := 20
@@ -86,7 +87,8 @@ var _well_popup_visible := false
 var _well_popup_indices: Array[int] = []   # 우물에 바칠 수 있는 인벤 인덱스
 
 var _spell_popup_visible := false
-var _spell_popup_list: Array = []   # [{id, name, mp_cost}]
+var _spell_popup_list: Array = []   # [{id, name, mp_cost}] or [{id, name, level}] in enhance mode
+var _spell_popup_enhance_mode := false  # true → 강화 선택 팝업
 
 var _class_skill_cooldown: int = 0
 var _class_skill_label: String = "스킬"
@@ -187,12 +189,20 @@ func set_throw_mode(active: bool) -> void:
 
 func show_spell_popup(spells: Array) -> void:
 	_spell_popup_list = spells
+	_spell_popup_enhance_mode = false
+	_spell_popup_visible = true
+	queue_redraw()
+
+func show_spell_enhance_popup(spells: Array) -> void:
+	_spell_popup_list = spells
+	_spell_popup_enhance_mode = true
 	_spell_popup_visible = true
 	queue_redraw()
 
 func close_spell_popup() -> void:
 	_spell_popup_visible = false
 	_spell_popup_list = []
+	_spell_popup_enhance_mode = false
 	queue_redraw()
 
 func show_well_popup(inv_indices: Array[int]) -> void:
@@ -349,15 +359,24 @@ func _input(event: InputEvent) -> void:
 			for i in _spell_popup_list.size():
 				if _spell_item_rect(i, spr).has_point(p):
 					var sd: Dictionary = _spell_popup_list[i]
+					var is_enhance: bool = _spell_popup_enhance_mode
 					_spell_popup_visible = false
 					_spell_popup_list = []
+					_spell_popup_enhance_mode = false
 					queue_redraw()
-					spell_selected.emit(sd.id)
+					if is_enhance:
+						spell_enhance_selected.emit(sd.id)
+					else:
+						spell_selected.emit(sd.id)
 					get_viewport().set_input_as_handled()
 					return
+		var was_enhance: bool = _spell_popup_enhance_mode
 		_spell_popup_visible = false
 		_spell_popup_list = []
+		_spell_popup_enhance_mode = false
 		queue_redraw()
+		if was_enhance:
+			spell_enhance_selected.emit("")
 		get_viewport().set_input_as_handled()
 		return
 
@@ -1241,8 +1260,9 @@ func _draw_spell_popup() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.45))
 	draw_rect(pr, Color(0.05, 0.07, 0.20, 0.97))
 	draw_rect(pr, Color(0.35, 0.35, 0.85, 0.8), false)
+	var title: String = "마법 강화 선택" if _spell_popup_enhance_mode else "마법 선택"
 	draw_string(font, Vector2(pr.position.x, pr.position.y + 22),
-		"마법 선택", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 13, Color("#9090ff"))
+		title, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 13, Color("#9090ff"))
 	if _spell_popup_list.is_empty():
 		draw_string(font, Vector2(pr.position.x, pr.position.y + 50),
 			"배운 마법이 없습니다.", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 11, Color(0.55, 0.55, 0.55))
@@ -1253,7 +1273,12 @@ func _draw_spell_popup() -> void:
 		draw_rect(r, Color(0.28, 0.28, 0.72, 0.7), false)
 		draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
 			d.name, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 68, 11, Color.WHITE)
-		draw_string(font, Vector2(r.position.x, r.position.y + r.size.y * 0.5 + 5),
-			"MP %d" % d.mp_cost, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 8, 10, Color("#66ccff"))
+		if _spell_popup_enhance_mode:
+			var lv_str: String = "Lv.%d → %d" % [d.level, d.level + 1]
+			draw_string(font, Vector2(r.position.x, r.position.y + r.size.y * 0.5 + 5),
+				lv_str, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 8, 10, Color("#ffdd66"))
+		else:
+			draw_string(font, Vector2(r.position.x, r.position.y + r.size.y * 0.5 + 5),
+				"MP %d" % d.mp_cost, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 8, 10, Color("#66ccff"))
 	draw_string(font, Vector2(pr.position.x, pr.end.y - 8),
 		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.32, 0.32, 0.35))
