@@ -322,10 +322,15 @@ func _pick_bush_drop() -> Item:
 
 func _resolve_jar(tile_pos: Vector2i) -> void:
 	var roll: int = randi() % 100
-	if roll < 40:
+	if roll < 25:
 		var mat := Item.new()
 		mat.item_type = [Item.Type.MATERIAL_CLOTH, Item.Type.MATERIAL_ORE, Item.Type.FOOD][randi() % 3]
 		_pick_or_drop(mat, tile_pos)
+	elif roll < 40:
+		var gold_amount: int = randi_range(5, 20)
+		player.gold += gold_amount
+		hud.add_log("항아리에서 골드 %dG 발견!" % gold_amount)
+		_refresh_hud()
 	elif roll < 70:
 		hud.add_log("항아리는 비어있었습니다.")
 	elif roll < 90:
@@ -1746,22 +1751,26 @@ func _trigger_herb(pos: Vector2i, cell: int) -> void:
 
 func _on_skull_approached(tile_pos: Vector2i) -> void:
 	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
-	if player.inventory.size() >= player.MAX_INVENTORY:
+	var skull_roll: int = randi() % 4
+	if skull_roll == 3:
+		# 골드 드롭
+		var gold_amount: int = randi_range(5, 15)
+		player.gold += gold_amount
+		hud.add_log("해골더미에서 골드 %dG 발견!" % gold_amount)
+	elif player.inventory.size() >= player.MAX_INVENTORY:
 		hud.add_log("인벤토리가 가득 차 해골더미를 뒤질 수 없습니다.")
 	else:
 		var item := Item.new()
-		match randi() % 3:
+		match skull_roll:
 			0:  # 장비
-				var equips: Array = [Item.Type.WEAPON_WOOD, Item.Type.WEAPON_STONE,
-					Item.Type.SHIELD_WOOD, Item.Type.ARMOR_CLOTH]
+				var equips: Array = [Item.Type.WEAPON_WOOD, Item.Type.WEAPON_STONE, Item.Type.SHIELD_WOOD, Item.Type.ARMOR_CLOTH]
 				var t: int = equips[randi() % equips.size()]
 				item.item_type = t
 				if Item.EQUIPMENT_DATA.has(t):
 					item.durability = Item.EQUIPMENT_DATA[t][3]
 					item.max_durability = item.durability
 			1:  # 재료
-				var mats: Array = [Item.Type.MATERIAL_BRANCH, Item.Type.MATERIAL_STONE,
-					Item.Type.MATERIAL_CLOTH, Item.Type.MATERIAL_ORE]
+				var mats: Array = [Item.Type.MATERIAL_BRANCH, Item.Type.MATERIAL_STONE, Item.Type.MATERIAL_CLOTH, Item.Type.MATERIAL_ORE]
 				item.item_type = mats[randi() % mats.size()]
 			2:  # 물약
 				var cidx: int = randi() % 6

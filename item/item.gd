@@ -366,30 +366,30 @@ func apply(player) -> String:
 			player.stats_changed.emit()
 			return "수면 상태이상! (%d턴)" % SLEEP_TURNS
 		Type.FOOD:
-			var reduce: int = 50 if is_blessed else 30
+			var reduce: int = 75 if is_blessed else 50
 			player.hunger = max(0, player.hunger - reduce) as int
 			player.stats_changed.emit()
 			return "식량 섭취! 배고픔 -%d%s" % [reduce, " [축복]" if is_blessed else ""]
 		Type.COOKED_FOOD:
-			player.hunger = max(0, player.hunger - 60)
+			player.hunger = max(0, player.hunger - 40)
 			player.stats_changed.emit()
-			return "익은 식량 섭취! 배고픔 -60"
+			return "익은 식량 섭취! 배고픔 -40"
 		Type.FOOD_ROTTEN:
-			player.hunger = max(0, player.hunger - 20)
+			player.hunger = max(0, player.hunger - 15)
 			player.apply_status("poison", POISON_TURNS)
 			player.stats_changed.emit()
-			return "상한 식량 섭취! 배고픔 -20, 독 상태이상!"
+			return "상한 식량 섭취! 배고픔 -15, 독 상태이상!"
 		Type.BURNED_FOOD:
-			player.hunger = max(0, player.hunger - 35)
+			player.hunger = max(0, player.hunger - 25)
 			player.stats_changed.emit()
-			return "탄 식량 섭취! 배고픔 -35"
+			return "탄 식량 섭취! 배고픔 -25"
 		Type.MATERIAL_RAW_MEAT:
-			player.hunger = max(0, player.hunger - 20) as int
+			player.hunger = max(0, player.hunger - 15) as int
 			player.stats_changed.emit()
 			if randf() < 0.3:
 				player.apply_status("poison", POISON_TURNS)
-				return "생고기 섭취! 배고픔 -20, 독 상태이상!"
-			return "생고기 섭취! 배고픔 -20"
+				return "생고기 섭취! 배고픔 -15, 독 상태이상!"
+			return "생고기 섭취! 배고픔 -15"
 		Type.TOOL_REPAIR:
 			var target: Item = null
 			var lowest: float = 1.0
