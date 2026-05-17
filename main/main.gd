@@ -20,6 +20,7 @@ var _identified: Array[bool] = [false, false, false, false, false, false, false,
 # 던지기 타겟팅
 var _throw_mode := false
 var _throw_item_idx := -1
+var _throw_from_slot := false
 var _has_boss_key := false
 var floor_items: Array[Dictionary] = []
 
@@ -98,6 +99,8 @@ func _init_run() -> void:
 		hud.item_action.connect(_on_item_action)
 	if not hud.throw_cancelled.is_connected(_on_throw_cancelled):
 		hud.throw_cancelled.connect(_on_throw_cancelled)
+	if not hud.throwable_slot_tapped.is_connected(_on_throwable_slot_tapped):
+		hud.throwable_slot_tapped.connect(_on_throwable_slot_tapped)
 	if not hud.craft_recipe_selected.is_connected(_on_craft_recipe):
 		hud.craft_recipe_selected.connect(_on_craft_recipe)
 	if not hud.unequip_requested.is_connected(_on_unequip_requested):
@@ -404,7 +407,7 @@ func _refresh_hud() -> void:
 		player.paralyze_turns, player.frozen_turns, player.slow_turns,
 		player.wound_turns, player.blind_turns, player.invincible_turns)
 	hud.update_inventory(player.inventory, _identified)
-	hud.update_equipped(player.equipped_weapon, player.equipped_shield, player.equipped_armor)
+	hud.update_equipped(player.equipped_weapon, player.equipped_shield, player.equipped_armor, player.equipped_throwable, player.throwable_count)
 	var skill_labels := ["강타", "회오리", "섬광탄", "난사"]
 	var label: String = skill_labels[player.class_type] if player.class_type < skill_labels.size() else "스킬"
 	hud.set_class_skill_info(label, player.class_skill_cooldown, player.mp)
@@ -799,6 +802,15 @@ func _on_item_action(idx: int, action: String) -> void:
 		_enter_throw_mode()
 		return
 
+	if action == "equip_throwable":
+		var t_item: Item = player.inventory[idx]
+		player.inventory.remove_at(idx)
+		player.equip_throwable(t_item)
+		hud.add_log("%s 투척 슬롯에 장착! (%d발)" % [t_item.get_display_name(true), player.throwable_count])
+		hud.close_inventory()
+		_refresh_hud()
+		return
+
 	var item: Item = player.inventory[idx]
 	if action == "place":
 		var ident_place: bool = item.item_type != Item.Type.FOOD and \
@@ -983,14 +995,23 @@ func _enter_throw_mode() -> void:
 
 func _exit_throw_mode() -> void:
 	_throw_mode = false
+	_throw_from_slot = false
 	player.input_blocked = false
 	map.throw_highlight_tiles = []
 	map.queue_redraw()
 	hud.set_throw_mode(false)
 
 func _on_throw_cancelled() -> void:
+	_throw_from_slot = false
 	_exit_throw_mode()
 	hud.add_log("던지기 취소")
+
+func _on_throwable_slot_tapped() -> void:
+	if player.equipped_throwable == null:
+		return
+	_throw_from_slot = true
+	_throw_item_idx = -1
+	_enter_throw_mode()
 
 func _execute_throw(target_tile: Vector2i) -> void:
 	var dist: int = abs(target_tile.x - player.tile_pos.x) + abs(target_tile.y - player.tile_pos.y)
@@ -1000,6 +1021,25 @@ func _execute_throw(target_tile: Vector2i) -> void:
 		return
 
 	_exit_throw_mode()
+
+	if _throw_from_slot:
+		_throw_from_slot = false
+		if player.equipped_throwable == null:
+			return
+		var t_item: Item = player.equipped_throwable
+		var t_dmg: int = Item.DART_DMG if t_item.item_type == Item.Type.MATERIAL_DART else Item.ARROW_DMG
+		var t_name: String = t_item.get_display_name(true)
+		var t_enemy = enemy_manager.get_enemy_at(target_tile)
+		if t_enemy and is_instance_valid(t_enemy):
+			_spawn_hit(t_enemy.position)
+			_apply_throw_damage(t_enemy, t_dmg, t_name)
+			hud.add_log("%s 명중! 데미지 %d" % [t_name, t_dmg])
+		else:
+			hud.add_log("%s이 허공으로 날아갔다." % t_name)
+		player.use_throwable()
+		_refresh_hud()
+		enemy_manager.do_turns(player.tile_pos)
+		return
 
 	if _throw_item_idx < 0 or _throw_item_idx >= player.inventory.size():
 		return
@@ -1032,8 +1072,12 @@ func _execute_throw(target_tile: Vector2i) -> void:
 		_drop_item(cooked, target_tile)
 		handled_tile = true
 	elif target_cell in [map.Cell.HERB_ICE, map.Cell.HERB_BLOOD_MOSS, map.Cell.HERB_GINSENG, map.Cell.HERB_NIGHTSHADE, map.Cell.HERB_AMBROSIA, map.Cell.HERB_MUSHROOM, map.Cell.HERB_MANDRAKE, map.Cell.HERB_FIREWORT, map.Cell.HERB_DREAMGRASS, map.Cell.HERB_GARLIC]:
-		hud.add_log("수풀에 던졌습니다! 약초밭이 강제 발동됩니다.")
-		_trigger_herb(target_tile, target_cell)
+		if dist <= 1:
+			hud.add_log("수풀에 던졌습니다! 약초밭이 강제 발동됩니다.")
+			_trigger_herb(target_tile, target_cell)
+		else:
+			map.set_cell(target_tile.x, target_tile.y, map.Cell.FLOOR)
+			hud.add_log("약초밭에 던졌습니다. 너무 멀어 효과가 없습니다.")
 		handled_tile = true
 	elif target_cell == map.Cell.TRAP:
 		var trap_t: int = _trap_data.get(target_tile, 0)
@@ -1694,10 +1738,6 @@ func _trigger_spring(pos: Vector2i, cell: int) -> void:
 # ── 제단 상호작용 ────────────────────────────────────────────────────────────
 
 func _trigger_altar(pos: Vector2i, cell: int) -> void:
-	map.set_cell(pos.x, pos.y, map.Cell.FLOOR)
-	if player.inventory.size() >= player.MAX_INVENTORY:
-		hud.add_log("인벤토리가 가득 차 제단 아이템을 가져올 수 없습니다.")
-		return
 	var item := Item.new()
 	if cell == map.Cell.ALTAR_BIG:
 		# 큰 제단: 더 좋은 아이템 (장비 위주)
@@ -1725,9 +1765,14 @@ func _trigger_altar(pos: Vector2i, cell: int) -> void:
 			var sidx: int = randi() % 4
 			item.item_type = Item.SCROLL_TYPES[sidx]
 			item.color_idx = 6 + sidx
-	player.inventory.append(item)
 	var label := "대제단" if cell == map.Cell.ALTAR_BIG else "제단"
-	hud.add_log("%s에서 %s 획득!" % [label, item.get_display_name(true)])
+	if player.inventory.size() >= player.MAX_INVENTORY:
+		_drop_item(item, pos)
+		hud.add_log("%s에서 %s — 인벤 가득, 바닥에 떨어졌습니다." % [label, item.get_display_name(true)])
+	else:
+		player.inventory.append(item)
+		hud.add_log("%s에서 %s 획득!" % [label, item.get_display_name(true)])
+	map.set_cell(pos.x, pos.y, map.Cell.FLOOR)
 	_refresh_hud()
 
 # ── 약초밭 상호작용 ──────────────────────────────────────────────────────────

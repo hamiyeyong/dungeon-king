@@ -128,6 +128,14 @@ static func get_type_name(t: int) -> String:
 		Type.MATERIAL_HERO_STONE:             return "영웅의 돌"
 	return "?"
 
+const THROWABLE_BUNDLE_SIZES := {
+	Type.MATERIAL_DART: 5,
+	Type.MATERIAL_ARROW_WOOD: 10,
+}
+
+const DART_DMG := 3
+const ARROW_DMG := 5
+
 const POISON_DMG_PER_TURN := 2
 const POISON_TURNS        := 5
 const FIRE_DMG_PER_TURN   := 3
@@ -175,6 +183,9 @@ static func get_spell_id_for_type(t: int) -> String:
 		Type.ANCIENT_SCROLL_BARK_ARMOR:       return "bark_armor"
 		Type.ANCIENT_SCROLL_DISPEL:           return "dispel"
 	return ""
+
+func is_throwable() -> bool:
+	return item_type in [Type.MATERIAL_DART, Type.MATERIAL_ARROW_WOOD]
 
 func is_food() -> bool:
 	return item_type in [Type.FOOD, Type.COOKED_FOOD, Type.FOOD_ROTTEN, Type.BURNED_FOOD]

@@ -66,11 +66,13 @@ var turn_num: int = 0
 var next_atk_multiplier: int = 1   # 강타 주문서 효과 (사용 후 다음 공격 배수)
 
 var inventory: Array[Item] = []
-const MAX_INVENTORY := 10
+const MAX_INVENTORY := 20
 
 var equipped_weapon: Item = null
 var equipped_shield: Item = null
 var equipped_armor: Item  = null
+var equipped_throwable: Item = null
+var throwable_count: int = 0
 
 var poison_turns: int = 0
 var fire_turns: int = 0
@@ -174,6 +176,8 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	equipped_weapon = null
 	equipped_shield = null
 	equipped_armor = null
+	equipped_throwable = null
+	throwable_count = 0
 	_recalc_equip_stats()
 
 func apply_rune_effects() -> void:
@@ -469,6 +473,21 @@ func unequip(slot: String) -> String:
 	_recalc_equip_stats()
 	stats_changed.emit()
 	return "%s 해제" % item.get_display_name(true)
+
+func equip_throwable(item: Item) -> void:
+	equipped_throwable = item
+	throwable_count = Item.THROWABLE_BUNDLE_SIZES.get(item.item_type, 1)
+	stats_changed.emit()
+
+func use_throwable() -> bool:
+	if equipped_throwable == null or throwable_count <= 0:
+		return false
+	throwable_count -= 1
+	if throwable_count <= 0:
+		equipped_throwable = null
+		throwable_count = 0
+	stats_changed.emit()
+	return true
 
 func unequip_weapon() -> void:
 	if equipped_weapon and inventory.size() < MAX_INVENTORY:

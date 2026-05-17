@@ -12,7 +12,8 @@ const WAIT_SZ  := 44
 const EQUIP_SZ := 50   # 하단바 장착 슬롯
 const BAG_W    := 58   # 가방 버튼 폭
 const EQUIP_GAP := 4
-const INV_COUNT := 10
+const INV_COUNT := 20
+const MERCHANT_MAX_VISIBLE := 8
 
 # 가방 팝업 내 슬롯 크기
 const BAG_EQUIP_SZ := 60
@@ -23,6 +24,7 @@ signal home_requested
 signal item_action(idx: int, action: String)
 signal unequip_requested(slot: String)
 signal throw_cancelled
+signal throwable_slot_tapped
 signal craft_recipe_selected(recipe_idx: int)
 signal campfire_action(action: String)       # "camp" | "cook" | "cancel"
 signal campfire_cook_selected(item_idx: int) # 선택한 식량의 인벤 인덱스
@@ -62,6 +64,8 @@ var _inventory_identified: Array = []
 var _equipped_weapon: Item = null
 var _equipped_shield: Item = null
 var _equipped_armor: Item  = null
+var _equipped_throwable: Item = null
+var _throwable_count: int = 0
 
 var _bag_visible := false
 
@@ -82,6 +86,7 @@ var _merchant_visible := false
 var _merchant_sell_mode := false
 var _merchant_shop_items: Array[Dictionary] = []   # {item, price, sold}
 var _merchant_sell_prices: Array[int] = []
+var _merchant_scroll_offset: int = 0
 
 var _well_popup_visible := false
 var _well_popup_indices: Array[int] = []   # 우물에 바칠 수 있는 인벤 인덱스
@@ -138,10 +143,12 @@ func update_inventory(items: Array[Item], identified: Array) -> void:
 	_inventory_identified = identified
 	queue_redraw()
 
-func update_equipped(weapon: Item, shield: Item, armor: Item) -> void:
+func update_equipped(weapon: Item, shield: Item, armor: Item, throwable: Item = null, throw_count: int = 0) -> void:
 	_equipped_weapon = weapon
 	_equipped_shield = shield
 	_equipped_armor  = armor
+	_equipped_throwable = throwable
+	_throwable_count = throw_count
 	queue_redraw()
 
 func add_log(msg: String) -> void:
@@ -215,6 +222,7 @@ func show_well_popup(inv_indices: Array[int]) -> void:
 func show_merchant_popup(shop_items: Array[Dictionary], sell_prices: Array[int]) -> void:
 	_merchant_visible = true
 	_merchant_sell_mode = false
+	_merchant_scroll_offset = 0
 	_merchant_shop_items = shop_items
 	_merchant_sell_prices = sell_prices
 	queue_redraw()
@@ -316,24 +324,44 @@ func _input(event: InputEvent) -> void:
 			return
 		if _merchant_toggle_btn_rect(mp).has_point(p):
 			_merchant_sell_mode = not _merchant_sell_mode
+			_merchant_scroll_offset = 0
 			queue_redraw()
 			get_viewport().set_input_as_handled()
 			return
+		if _merchant_scroll_up_rect(mp).has_point(p):
+			if _merchant_scroll_offset > 0:
+				_merchant_scroll_offset -= 1
+				queue_redraw()
+			get_viewport().set_input_as_handled()
+			return
+		if _merchant_scroll_down_rect(mp).has_point(p):
+			var item_count: int = _inventory_items.size() if _merchant_sell_mode else _merchant_shop_items.size()
+			if _merchant_scroll_offset + MERCHANT_MAX_VISIBLE < item_count:
+				_merchant_scroll_offset += 1
+				queue_redraw()
+			get_viewport().set_input_as_handled()
+			return
 		if _merchant_sell_mode:
-			for i in _inventory_items.size():
-				if _merchant_row_rect(mp, i).has_point(p):
-					var act_btn := _merchant_action_btn_rect(mp, i)
+			for display_i in MERCHANT_MAX_VISIBLE:
+				var real_i: int = display_i + _merchant_scroll_offset
+				if real_i >= _inventory_items.size():
+					break
+				if _merchant_row_rect(mp, display_i).has_point(p):
+					var act_btn := _merchant_action_btn_rect(mp, display_i)
 					if act_btn.has_point(p):
-						merchant_sell.emit(i)
+						merchant_sell.emit(real_i)
 					get_viewport().set_input_as_handled()
 					return
 		else:
-			for i in _merchant_shop_items.size():
-				if _merchant_row_rect(mp, i).has_point(p):
-					var act_btn := _merchant_action_btn_rect(mp, i)
-					var d: Dictionary = _merchant_shop_items[i]
+			for display_i in MERCHANT_MAX_VISIBLE:
+				var real_i: int = display_i + _merchant_scroll_offset
+				if real_i >= _merchant_shop_items.size():
+					break
+				if _merchant_row_rect(mp, display_i).has_point(p):
+					var act_btn := _merchant_action_btn_rect(mp, display_i)
+					var d: Dictionary = _merchant_shop_items[real_i]
 					if act_btn.has_point(p) and not d.sold:
-						merchant_buy.emit(i)
+						merchant_buy.emit(real_i)
 					get_viewport().set_input_as_handled()
 					return
 		get_viewport().set_input_as_handled()
@@ -416,7 +444,22 @@ func _input(event: InputEvent) -> void:
 	if _action_popup_visible:
 		var _cur_item: Item = _inventory_items[_action_item_idx] if _action_item_idx < _inventory_items.size() else null
 		var _is_equip: bool = _cur_item != null and _cur_item.is_equipment()
-		if _action_use_rect().has_point(p):
+		var _is_throw: bool = _cur_item != null and _cur_item.is_throwable()
+		if _is_throw:
+			if _action_use_rect().has_point(p):
+				_action_popup_visible = false
+				_bag_visible = false
+				queue_redraw()
+				item_action.emit(_action_item_idx, "equip_throwable")
+			elif _action_discard_rect().has_point(p):
+				_action_popup_visible = false
+				_bag_visible = false
+				queue_redraw()
+				item_action.emit(_action_item_idx, "discard")
+			else:
+				_action_popup_visible = false
+				queue_redraw()
+		elif _action_use_rect().has_point(p):
 			_action_popup_visible = false
 			_bag_visible = false
 			queue_redraw()
@@ -487,6 +530,13 @@ func _input(event: InputEvent) -> void:
 	if _bag_btn_rect().has_point(p):
 		_bag_visible = true
 		queue_redraw()
+		get_viewport().set_input_as_handled()
+		return
+
+	# 투척 슬롯
+	if _throwable_slot_rect().has_point(p):
+		if _equipped_throwable != null:
+			throwable_slot_tapped.emit()
 		get_viewport().set_input_as_handled()
 		return
 
@@ -668,6 +718,24 @@ func _draw_bottom_bar() -> void:
 	draw_rect(br, Color(0.4, 0.5, 0.75, 0.85), false, 1.5)
 	draw_string(font, Vector2(br.position.x + br.size.x * 0.5, br.position.y + br.size.y * 0.5 + 5),
 		"가방", HORIZONTAL_ALIGNMENT_CENTER, -1, 11, Color(0.7, 0.85, 1.0))
+
+	# 투척 슬롯
+	var tr := _throwable_slot_rect()
+	var has_throwable: bool = _equipped_throwable != null
+	draw_rect(tr, Color(0.2, 0.15, 0.2, 0.9) if has_throwable else Color(0.12, 0.12, 0.15, 0.85))
+	draw_rect(tr, Color(0.8, 0.5, 0.8, 0.85) if has_throwable else Color(0.28, 0.28, 0.3, 0.6), false)
+	if has_throwable:
+		var t_atlas: Vector2i = _equipped_throwable.get_atlas()
+		var t_src := Rect2(t_atlas.x * ATLAS_TILE, t_atlas.y * ATLAS_TILE, ATLAS_TILE, ATLAS_TILE)
+		var t_img_rect := Rect2(tr.position.x + (tr.size.x - 22.0) * 0.5, tr.position.y + 3, 22.0, 22.0)
+		draw_texture_rect_region(TILESET, t_img_rect, t_src)
+		draw_string(font, Vector2(tr.position.x, tr.end.y - 3),
+			str(_throwable_count), HORIZONTAL_ALIGNMENT_CENTER, tr.size.x, 7, Color(1.0, 0.85, 0.4))
+		draw_string(font, Vector2(tr.position.x, tr.position.y + 10),
+			"투척", HORIZONTAL_ALIGNMENT_CENTER, tr.size.x, 7, Color(0.8, 0.6, 0.9))
+	else:
+		draw_string(font, Vector2(tr.position.x, tr.position.y + tr.size.y * 0.5 + 5),
+			"투척", HORIZONTAL_ALIGNMENT_CENTER, tr.size.x, 8, Color(0.35, 0.35, 0.38))
 
 	# 직업 스킬 버튼
 	var csr := _class_skill_rect()
@@ -901,9 +969,15 @@ func _action_is_equip() -> bool:
 		return false
 	return _inventory_items[_action_item_idx].is_equipment()
 
+func _action_is_throwable() -> bool:
+	if _action_item_idx < 0 or _action_item_idx >= _inventory_items.size():
+		return false
+	return _inventory_items[_action_item_idx].is_throwable()
+
 func _draw_action_popup() -> void:
 	var font := ThemeDB.fallback_font
-	var pw := 180.0; var ph := 160.0 if _action_is_equip() else 130.0
+	var ph: float = 160.0 if _action_is_equip() else (100.0 if _action_is_throwable() else 130.0)
+	var pw := 180.0
 	var px := (W - pw) * 0.5; var py := (H - ph) * 0.5
 
 	draw_rect(Rect2(px, py, pw, ph), Color(0.05, 0.05, 0.08, 0.97))
@@ -922,12 +996,17 @@ func _draw_action_popup() -> void:
 	var _ai := _action_item_idx
 	var _it: Item = _inventory_items[_ai] if _ai < _inventory_items.size() else null
 	var _is_equip_item: bool = _it != null and _it.is_equipment()
-	var _use_label := "장착" if _is_equip_item else "먹기 / 사용"
-	_draw_action_btn(_action_use_rect(),     _use_label, Color(0.14, 0.4,  0.14, 0.95))
-	_draw_action_btn(_action_throw_rect(),   "던지기",    Color(0.14, 0.25, 0.4,  0.95))
-	if _is_equip_item:
-		_draw_action_btn(_action_disassemble_rect(), "분해", Color(0.45, 0.28, 0.08, 0.95))
-	_draw_action_btn(_action_discard_rect(), "버리기",    Color(0.36, 0.1,  0.1,  0.95))
+	var _is_throw_item: bool = _it != null and _it.is_throwable()
+	if _is_throw_item:
+		_draw_action_btn(_action_use_rect(), "투척 장착", Color(0.18, 0.15, 0.35, 0.95))
+		_draw_action_btn(_action_discard_rect(), "버리기", Color(0.36, 0.1, 0.1, 0.95))
+	else:
+		var _use_label := "장착" if _is_equip_item else "먹기 / 사용"
+		_draw_action_btn(_action_use_rect(),     _use_label, Color(0.14, 0.4,  0.14, 0.95))
+		_draw_action_btn(_action_throw_rect(),   "던지기",    Color(0.14, 0.25, 0.4,  0.95))
+		if _is_equip_item:
+			_draw_action_btn(_action_disassemble_rect(), "분해", Color(0.45, 0.28, 0.08, 0.95))
+		_draw_action_btn(_action_discard_rect(), "버리기",    Color(0.36, 0.1,  0.1,  0.95))
 
 func _draw_action_btn(r: Rect2, label: String, color: Color) -> void:
 	var font := ThemeDB.fallback_font
@@ -1015,13 +1094,16 @@ func _popup_cancel_rect() -> Rect2:
 func _overlay_btn_rect() -> Rect2:
 	return Rect2(W * 0.5 - 70, H * 0.5 + 20, 140, 34)
 
+func _action_popup_height() -> float:
+	return 160.0 if _action_is_equip() else (100.0 if _action_is_throwable() else 130.0)
+
 func _action_use_rect() -> Rect2:
-	var pw := 180.0; var ph := 160.0 if _action_is_equip() else 130.0
+	var pw := 180.0; var ph := _action_popup_height()
 	var px := (W - pw) * 0.5; var py := (H - ph) * 0.5
 	return Rect2(px + 12, py + 34, pw - 24, 26)
 
 func _action_throw_rect() -> Rect2:
-	var pw := 180.0; var ph := 160.0 if _action_is_equip() else 130.0
+	var pw := 180.0; var ph := _action_popup_height()
 	var px := (W - pw) * 0.5; var py := (H - ph) * 0.5
 	return Rect2(px + 12, py + 64, pw - 24, 26)
 
@@ -1031,10 +1113,21 @@ func _action_disassemble_rect() -> Rect2:
 	return Rect2(px + 12, py + 94, pw - 24, 26)
 
 func _action_discard_rect() -> Rect2:
-	var pw := 180.0; var ph := 160.0 if _action_is_equip() else 130.0
+	var pw := 180.0; var ph := _action_popup_height()
 	var px := (W - pw) * 0.5; var py := (H - ph) * 0.5
-	var btn_y := 124.0 if _action_is_equip() else 94.0
+	var btn_y: float = 124.0 if _action_is_equip() else (64.0 if _action_is_throwable() else 94.0)
 	return Rect2(px + 12, py + btn_y, pw - 24, 26)
+
+func _throwable_slot_rect() -> Rect2:
+	var y := H - BAR_H + (BAR_H - EQUIP_SZ) / 2
+	var bag := _bag_btn_rect()
+	return Rect2(bag.end.x + 6, y, EQUIP_SZ, EQUIP_SZ)
+
+func _merchant_scroll_up_rect(pr: Rect2) -> Rect2:
+	return Rect2(pr.position.x + 130, pr.end.y - 36, 50, 28)
+
+func _merchant_scroll_down_rect(pr: Rect2) -> Rect2:
+	return Rect2(pr.position.x + 188, pr.end.y - 36, 50, 28)
 
 func _equip_action_unequip_rect() -> Rect2:
 	var pw := 180.0; var ph := 90.0
@@ -1043,7 +1136,7 @@ func _equip_action_unequip_rect() -> Rect2:
 
 func _bag_popup_rect() -> Rect2:
 	var pw := 360.0
-	var ph := 290.0
+	var ph := 400.0
 	return Rect2((W - pw) * 0.5, (H - ph) * 0.5, pw, ph)
 
 func _bag_equip_slot_rect(i: int) -> Rect2:
@@ -1181,20 +1274,22 @@ func _draw_merchant_popup() -> void:
 	else:
 		item_list = _merchant_shop_items
 
-	var max_rows: int = min(item_list.size(), 9)
-	for i in max_rows:
-		var row := _merchant_row_rect(pr, i)
+	var total_items: int = item_list.size()
+	var max_rows: int = min(total_items - _merchant_scroll_offset, MERCHANT_MAX_VISIBLE)
+	for display_i in max_rows:
+		var real_i: int = display_i + _merchant_scroll_offset
+		var row := _merchant_row_rect(pr, display_i)
 		draw_rect(row, Color(0.1, 0.12, 0.18, 0.8))
 
 		var item: Item
 		var price_text: String
 		var sold: bool = false
 		if _merchant_sell_mode:
-			item = _inventory_items[i]
-			var sp: int = _merchant_sell_prices[i] if i < _merchant_sell_prices.size() else 1
+			item = _inventory_items[real_i]
+			var sp: int = _merchant_sell_prices[real_i] if real_i < _merchant_sell_prices.size() else 1
 			price_text = "%dG" % sp
 		else:
-			var d: Dictionary = _merchant_shop_items[i]
+			var d: Dictionary = _merchant_shop_items[real_i]
 			item = d.item
 			price_text = "%dG" % d.price
 			sold = d.sold
@@ -1218,7 +1313,7 @@ func _draw_merchant_popup() -> void:
 			price_text, HORIZONTAL_ALIGNMENT_LEFT, 60, 10, Color("#f0d060"))
 
 		# 버튼
-		var btn := _merchant_action_btn_rect(pr, i)
+		var btn := _merchant_action_btn_rect(pr, display_i)
 		var btn_label: String
 		var btn_color: Color
 		if _merchant_sell_mode:
@@ -1242,6 +1337,21 @@ func _draw_merchant_popup() -> void:
 	var toggle_label := "▶ 판매하기" if not _merchant_sell_mode else "◀ 구매하기"
 	draw_string(font, Vector2(toggle_btn.position.x, toggle_btn.position.y + toggle_btn.size.y * 0.5 + 5),
 		toggle_label, HORIZONTAL_ALIGNMENT_CENTER, toggle_btn.size.x, 10, Color.WHITE)
+
+	# 스크롤 버튼
+	var item_count: int = item_list.size()
+	var can_up: bool = _merchant_scroll_offset > 0
+	var can_down: bool = _merchant_scroll_offset + MERCHANT_MAX_VISIBLE < item_count
+	var up_btn := _merchant_scroll_up_rect(pr)
+	var down_btn := _merchant_scroll_down_rect(pr)
+	draw_rect(up_btn, Color(0.2, 0.25, 0.35, 0.9) if can_up else Color(0.1, 0.1, 0.12, 0.5))
+	draw_rect(up_btn, Color(0.5, 0.6, 0.7, 0.6) if can_up else Color(0.25, 0.25, 0.28, 0.4), false)
+	draw_string(font, Vector2(up_btn.position.x, up_btn.position.y + up_btn.size.y * 0.5 + 5),
+		"▲ 이전", HORIZONTAL_ALIGNMENT_CENTER, up_btn.size.x, 9, Color.WHITE if can_up else Color(0.4, 0.4, 0.4))
+	draw_rect(down_btn, Color(0.2, 0.25, 0.35, 0.9) if can_down else Color(0.1, 0.1, 0.12, 0.5))
+	draw_rect(down_btn, Color(0.5, 0.6, 0.7, 0.6) if can_down else Color(0.25, 0.25, 0.28, 0.4), false)
+	draw_string(font, Vector2(down_btn.position.x, down_btn.position.y + down_btn.size.y * 0.5 + 5),
+		"▼ 다음", HORIZONTAL_ALIGNMENT_CENTER, down_btn.size.x, 9, Color.WHITE if can_down else Color(0.4, 0.4, 0.4))
 
 	var close_btn := _merchant_close_btn_rect(pr)
 	draw_rect(close_btn, Color(0.28, 0.08, 0.08, 0.9))
