@@ -78,6 +78,7 @@ var slow_turns: int = 0
 var wound_turns: int = 0
 var blind_turns: int = 0
 var invincible_turns: int = 0
+var class_skill_cooldown: int = 0
 var _slow_skip: bool = false
 var _save_atk_bonus: int = 0  # SaveData 마일스톤 ATK 보너스 (recalc 시 반영)
 var crit_rune_pct: int = 0    # 장착 룬으로 추가된 크리티컬 확률 %
@@ -136,6 +137,7 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	wound_turns = 0
 	blind_turns = 0
 	invincible_turns = 0
+	class_skill_cooldown = 0
 	_slow_skip = false
 	curse_atk = 0
 	hunger = 0
@@ -589,6 +591,8 @@ func _on_step(consume_hunger: bool = true) -> void:
 		blind_turns -= 1
 		var suffix := " (%d턴 남음)" % blind_turns if blind_turns > 0 else " (해제)"
 		log_message.emit("실명%s" % suffix)
+	if class_skill_cooldown > 0:
+		class_skill_cooldown -= 1
 	if poison_turns > 0:
 		poison_turns -= 1
 		hp = max(0, hp - Item.POISON_DMG_PER_TURN)

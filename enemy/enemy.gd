@@ -18,6 +18,7 @@ var def_ := 0
 var poison_turns: int = 0
 var fire_turns: int = 0
 var sleep_turns: int = 0
+var blind_turns: int = 0
 var is_boss: bool = false
 var is_alerted: bool = false
 var _hp_bar_timer: float = 0.0
@@ -61,11 +62,14 @@ func apply_status(type: String, turns: int) -> void:
 		fire_turns = max(fire_turns, turns) as int
 	elif type == "sleep":
 		sleep_turns = max(sleep_turns, turns) as int
+	elif type == "blind":
+		blind_turns = max(blind_turns, turns) as int
 
 func cleanse() -> void:
 	poison_turns = 0
 	fire_turns = 0
 	sleep_turns = 0
+	blind_turns = 0
 
 func tick_status() -> Dictionary:
 	var total_dmg: int = 0
@@ -98,6 +102,9 @@ func is_dead() -> bool:
 func ai_step(player_pos: Vector2i, occupied: Array) -> bool:
 	if sleep_turns > 0:
 		sleep_turns -= 1
+		return false
+	if blind_turns > 0:
+		blind_turns -= 1
 		return false
 	var dx := tile_pos.x - player_pos.x
 	var dy := tile_pos.y - player_pos.y

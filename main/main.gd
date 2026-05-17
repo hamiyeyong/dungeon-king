@@ -134,6 +134,8 @@ func _init_run() -> void:
 		hud.spell_slot_tapped.connect(_on_spell_slot_tapped)
 	if not hud.spell_selected.is_connected(_on_spell_selected):
 		hud.spell_selected.connect(_on_spell_selected)
+	if not hud.class_skill_tapped.is_connected(_on_class_skill_tapped):
+		hud.class_skill_tapped.connect(_on_class_skill_tapped)
 
 	# 탐험경험치 마일스톤 보너스 적용
 	_run_explore_xp = 0
@@ -370,6 +372,9 @@ func _refresh_hud() -> void:
 		player.wound_turns, player.blind_turns, player.invincible_turns)
 	hud.update_inventory(player.inventory, _identified)
 	hud.update_equipped(player.equipped_weapon, player.equipped_shield, player.equipped_armor)
+	var skill_labels := ["강타", "회오리", "섬광탄", "난사"]
+	var label: String = skill_labels[player.class_type] if player.class_type < skill_labels.size() else "스킬"
+	hud.set_class_skill_info(label, player.class_skill_cooldown, player.mp)
 
 # ── Unequip ────────────────────────────────────────────────────────────────
 
@@ -1776,6 +1781,122 @@ func _cast_self_spell(spell_id: String) -> void:
 		_trigger_game_over()
 		return
 	enemy_manager.do_turns(player.tile_pos)
+
+func _on_class_skill_tapped() -> void:
+	const SKILL_MP_COST := 35
+	const SKILL_COOLDOWN := 5
+	if player.class_skill_cooldown > 0:
+		hud.add_log("직업 스킬 쿨다운 중 (%d턴 남음)" % player.class_skill_cooldown)
+		return
+	if player.mp < SKILL_MP_COST:
+		hud.add_log("MP 부족! (필요 %d, 현재 %d)" % [SKILL_MP_COST, player.mp])
+		return
+	player.mp -= SKILL_MP_COST
+	player.class_skill_cooldown = SKILL_COOLDOWN
+	match player.class_type:
+		Player.ClassType.WARRIOR:
+			_class_skill_warrior()
+		Player.ClassType.MAGE:
+			_class_skill_mage()
+		Player.ClassType.ROGUE:
+			_class_skill_rogue()
+		Player.ClassType.HUNTER:
+			_class_skill_hunter()
+	_refresh_hud()
+	if player.hp <= 0:
+		_trigger_game_over()
+		return
+	enemy_manager.do_turns(player.tile_pos)
+
+func _class_skill_warrior() -> void:
+	var hit_count := 0
+	for e in enemy_manager.enemies.duplicate():
+		if not is_instance_valid(e):
+			continue
+		var dx: int = abs(e.tile_pos.x - player.tile_pos.x)
+		var dy: int = abs(e.tile_pos.y - player.tile_pos.y)
+		if dx <= 1 and dy <= 1:
+			for _hit in 2:
+				_spawn_hit(e.position)
+				var dmg: int = e.take_damage(player.atk)
+				if e.is_dead():
+					hud.add_log("지면강타! %s 처치!" % e.display_name)
+					player.gain_exp(5 * player.floor_num)
+					enemy_manager.remove_enemy(e)
+					break
+			hit_count += 1
+	if hit_count == 0:
+		hud.add_log("지면강타! (범위 내 적 없음)")
+	else:
+		hud.add_log("지면강타! 주변 %d마리에게 2연타!" % hit_count)
+
+func _class_skill_mage() -> void:
+	var hit_count := 0
+	for e in enemy_manager.enemies.duplicate():
+		if not is_instance_valid(e):
+			continue
+		var dx: int = abs(e.tile_pos.x - player.tile_pos.x)
+		var dy: int = abs(e.tile_pos.y - player.tile_pos.y)
+		if dx <= 2 and dy <= 2:
+			_spawn_hit(e.position)
+			var dmg: int = e.take_damage(player.atk)
+			e.apply_status("frozen", FROZEN_TURNS + 1)
+			if e.is_dead():
+				hud.add_log("얼음회오리! %s 처치!" % e.display_name)
+				player.gain_exp(5 * player.floor_num)
+				enemy_manager.remove_enemy(e)
+			hit_count += 1
+	if hit_count == 0:
+		hud.add_log("얼음회오리! (범위 내 적 없음)")
+	else:
+		hud.add_log("얼음회오리! 범위 내 %d마리 피해 + 빙결!" % hit_count)
+
+func _class_skill_rogue() -> void:
+	const BLIND_TURNS_SKILL := 4
+	const FLASH_DMG := 5
+	var hit_count := 0
+	for e in enemy_manager.enemies.duplicate():
+		if not is_instance_valid(e):
+			continue
+		_spawn_hit(e.position)
+		e.take_damage(FLASH_DMG)
+		e.apply_status("blind", BLIND_TURNS_SKILL)
+		if e.is_dead():
+			player.gain_exp(5 * player.floor_num)
+			enemy_manager.remove_enemy(e)
+		hit_count += 1
+	if hit_count == 0:
+		hud.add_log("섬광탄! (층 내 적 없음)")
+	else:
+		hud.add_log("섬광탄! 층 내 모든 적 피해 + 실명 %d턴!" % BLIND_TURNS_SKILL)
+
+func _class_skill_hunter() -> void:
+	var nearest: Enemy = null
+	var nearest_dist: int = 999
+	for e in enemy_manager.enemies:
+		if not is_instance_valid(e):
+			continue
+		var d: int = abs(e.tile_pos.x - player.tile_pos.x) + abs(e.tile_pos.y - player.tile_pos.y)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest = e
+	if nearest == null:
+		hud.add_log("난사! (층 내 적 없음)")
+		return
+	var target_name: String = nearest.display_name
+	var hit_count: int = randi() % 4 + 3  # 3~6
+	var total_dmg: int = 0
+	for _i in hit_count:
+		if not is_instance_valid(nearest):
+			break
+		_spawn_hit(nearest.position)
+		var dmg: int = nearest.take_damage(player.atk)
+		total_dmg += dmg
+		if nearest.is_dead():
+			player.gain_exp(5 * player.floor_num)
+			enemy_manager.remove_enemy(nearest)
+			break
+	hud.add_log("난사! %s에게 %d연타, 총 %d 피해!" % [target_name, hit_count, total_dmg])
 
 func _on_home_requested() -> void:
 	get_tree().call_deferred("change_scene_to_file", "res://home/home.tscn")
