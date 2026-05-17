@@ -305,9 +305,15 @@ func _on_player_attacked_cell(tile_pos: Vector2i) -> void:
 func _pick_bush_drop() -> Item:
 	var mat := Item.new()
 	var roll: int = randi() % 100
-	if roll < 40:
-		mat.item_type = Item.Type.MATERIAL_BOTTLE
+	if roll < 30:
+		mat.item_type = Item.Type.MATERIAL_BRANCH
+	elif roll < 55:
+		mat.item_type = Item.Type.MATERIAL_HERB
 	elif roll < 75:
+		mat.item_type = Item.Type.MATERIAL_STONE
+	elif roll < 90:
+		mat.item_type = Item.Type.MATERIAL_BOTTLE
+	elif roll < 97:
 		var cidx: int = randi() % 6
 		mat.item_type = _potion_map[cidx]
 		mat.color_idx = cidx
@@ -1004,10 +1010,15 @@ func _execute_throw(target_tile: Vector2i) -> void:
 		_trigger_herb(target_tile, target_cell)
 		handled_tile = true
 	elif target_cell == map.Cell.TRAP:
-		_trap_data.erase(target_tile)
-		map.set_cell(target_tile.x, target_tile.y, map.Cell.FLOOR)
-		hud.add_log("함정을 원격 발동시켜 해제했습니다!")
-		handled_tile = true
+		var trap_t: int = _trap_data.get(target_tile, 0)
+		if trap_t == 3:  # 스파이크: 해제 불가
+			hud.add_log("스파이크 함정은 아이템으로 해제할 수 없습니다!")
+			handled_tile = true
+		else:
+			_trap_data.erase(target_tile)
+			map.set_cell(target_tile.x, target_tile.y, map.Cell.FLOOR)
+			hud.add_log("함정을 원격 발동시켜 해제했습니다!")
+			handled_tile = true
 	if handled_tile:
 		player.inventory.remove_at(_throw_item_idx)
 		_throw_item_idx = -1
