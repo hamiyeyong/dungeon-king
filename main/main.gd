@@ -816,6 +816,21 @@ func _on_item_action(idx: int, action: String) -> void:
 		_refresh_hud()
 		return
 
+	if action == "use_dart":
+		var dart_item: Item = player.inventory[idx]
+		if player.equipped_throwable == null:
+			player.inventory.remove_at(idx)
+			player.equip_throwable(dart_item)
+		elif player.equipped_throwable.item_type != Item.Type.MATERIAL_DART:
+			hud.add_log("투척 슬롯이 이미 사용 중입니다.")
+			hud.close_inventory()
+			return
+		_throw_from_slot = true
+		_throw_item_idx = -1
+		hud.close_inventory()
+		_enter_throw_mode()
+		return
+
 	var item: Item = player.inventory[idx]
 	if action == "place":
 		var ident_place: bool = item.item_type != Item.Type.FOOD and \
@@ -835,6 +850,23 @@ func _on_item_action(idx: int, action: String) -> void:
 			_refresh_hud()
 			return
 		"use":
+			if item.item_type == Item.Type.MATERIAL_HERB:
+				player.hunger = max(0, player.hunger - 10)
+				match randi() % 3:
+					0:
+						player.hp = min(player.max_hp, player.hp + 3)
+						hud.add_log("약초를 씹어 먹었다. 허기가 조금 가셨다. HP +3")
+					1:
+						hud.add_log("약초를 씹어 먹었다. 허기가 조금 가셨다. 특별한 효과는 없었다.")
+					2:
+						player.apply_status("poison", Item.POISON_TURNS)
+						_spawn_poison(player.position)
+						hud.add_log("약초를 씹어 먹었다. 허기가 조금 가셨다... 독초였다!")
+				player.inventory.remove_at(idx)
+				hud.close_inventory()
+				_refresh_hud()
+				enemy_manager.do_turns(player.tile_pos)
+				return
 			if item.item_type == Item.Type.TOOL_REPAIR:
 				var msg := item.apply(player)
 				hud.add_log(msg)
@@ -1014,6 +1046,10 @@ func _on_throw_cancelled() -> void:
 func _on_throwable_slot_tapped() -> void:
 	if player.equipped_throwable == null:
 		return
+	if player.equipped_throwable.item_type == Item.Type.MATERIAL_ARROW_WOOD:
+		if player.equipped_weapon == null or player.equipped_weapon.item_type != Item.Type.WEAPON_BOW:
+			hud.add_log("활을 장착해야 화살을 쏠 수 있습니다.")
+			return
 	_throw_from_slot = true
 	_throw_item_idx = -1
 	_enter_throw_mode()
@@ -1187,14 +1223,8 @@ func _execute_throw(target_tile: Vector2i) -> void:
 				else:
 					hud.add_log(item.get_display_name(true) + "이 깨졌다.")
 		Item.Type.FOOD:
-			if map.get_cell(target_tile.x, target_tile.y) == map.Cell.CAMPFIRE:
-				var cooked := Item.new()
-				cooked.item_type = Item.Type.COOKED_FOOD
-				_drop_item(cooked, target_tile)
-				hud.add_log("식량이 모닥불에 구워졌다! 익은 식량이 놓였다.")
-			else:
-				_drop_item(item, target_tile)
-				hud.add_log("식량이 바닥에 떨어졌다.")
+			_drop_item(item, target_tile)
+			hud.add_log("식량이 바닥에 떨어졌다.")
 		Item.Type.MATERIAL_RAW_MEAT:
 			if map.get_cell(target_tile.x, target_tile.y) == map.Cell.CAMPFIRE:
 				var cooked := Item.new()
@@ -1427,10 +1457,10 @@ func _on_campfire_action(action: String) -> void:
 			var food_indices: Array[int] = []
 			for i in player.inventory.size():
 				var it: Item = player.inventory[i]
-				if it.item_type in [Item.Type.FOOD, Item.Type.COOKED_FOOD, Item.Type.MATERIAL_RAW_MEAT]:
+				if it.item_type == Item.Type.MATERIAL_RAW_MEAT:
 					food_indices.append(i)
 			if food_indices.is_empty():
-				hud.add_log("요리할 식량이 없습니다.")
+				hud.add_log("요리할 생고기가 없습니다.")
 				enemy_manager.do_turns(player.tile_pos)
 			else:
 				hud.show_cook_popup(food_indices)
@@ -1444,12 +1474,6 @@ func _on_campfire_cook_selected(item_idx: int) -> void:
 	var result := Item.new()
 	var log_msg: String
 	match item.item_type:
-		Item.Type.FOOD:
-			result.item_type = Item.Type.COOKED_FOOD
-			log_msg = "식량을 구웠습니다! 익은 식량 획득."
-		Item.Type.COOKED_FOOD:
-			result.item_type = Item.Type.BURNED_FOOD
-			log_msg = "이미 익은 식량을 더 구웠습니다... 탄 식량이 됐습니다."
 		Item.Type.MATERIAL_RAW_MEAT:
 			result.item_type = Item.Type.COOKED_FOOD
 			log_msg = "생고기를 구웠습니다! 익은 식량 획득."
