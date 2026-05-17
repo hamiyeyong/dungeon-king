@@ -6,7 +6,7 @@ enum Type {
 	FOOD, COOKED_FOOD, FOOD_ROTTEN,
 	SCROLL_ENHANCE, SCROLL_BASH, SCROLL_TELEPORT, SCROLL_IDENTIFY, SCROLL_REMOVE_CURSE,
 	WEAPON_WOOD, WEAPON_STONE, WEAPON_IRON,
-	WEAPON_SHORTSWORD, WEAPON_STAFF, WEAPON_DAGGER,
+	WEAPON_SHORTSWORD, WEAPON_STAFF, WEAPON_DAGGER, WEAPON_BOW,
 	SHIELD_WOOD, SHIELD_IRON,
 	ARMOR_CLOTH, ARMOR_LEATHER,
 	MATERIAL_BRANCH, MATERIAL_HERB, MATERIAL_STONE, MATERIAL_CLOTH, MATERIAL_TORCH,
@@ -73,6 +73,7 @@ const EQUIPMENT_DATA := {
 	Type.WEAPON_SHORTSWORD: ["숏소드",  4, 0,  20, Vector2i(2, 3)],
 	Type.WEAPON_STAFF:      ["지팡이",  2, 0,  18, Vector2i(0, 3)],
 	Type.WEAPON_DAGGER:     ["단검",    3, 0,  15, Vector2i(1, 3)],
+	Type.WEAPON_BOW:        ["활",      3, 0,  20, Vector2i(1, 7)],
 }
 
 # 제작 레시피: [결과타입, 결과내구도, [[재료타입, 개수], ...]]
@@ -84,6 +85,7 @@ const RECIPES: Array = [
 	[Type.ARMOR_LEATHER,  25, [[Type.MATERIAL_CLOTH,  1], [Type.MATERIAL_STONE, 1]]],
 	[Type.SCROLL_ENHANCE,  0, [[Type.MATERIAL_HERB,   2], [Type.MATERIAL_BRANCH, 1]]],
 	[Type.MATERIAL_TORCH,  0, [[Type.MATERIAL_BRANCH, 1], [Type.MATERIAL_CLOTH, 1]]],
+	[Type.WEAPON_BOW,     20, [[Type.MATERIAL_BRANCH, 2], [Type.MATERIAL_CLOTH, 1]]],
 	[Type.TOOL_REPAIR,     0, [[Type.MATERIAL_ORE, 1]]],
 ]
 
@@ -174,7 +176,7 @@ func is_material() -> bool:
 
 func is_weapon() -> bool:
 	return item_type in [Type.WEAPON_WOOD, Type.WEAPON_STONE, Type.WEAPON_IRON,
-		Type.WEAPON_SHORTSWORD, Type.WEAPON_STAFF, Type.WEAPON_DAGGER]
+		Type.WEAPON_SHORTSWORD, Type.WEAPON_STAFF, Type.WEAPON_DAGGER, Type.WEAPON_BOW]
 
 func is_shield() -> bool:
 	return item_type in [Type.SHIELD_WOOD, Type.SHIELD_IRON]

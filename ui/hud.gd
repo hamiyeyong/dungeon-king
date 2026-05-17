@@ -495,7 +495,8 @@ func _input(event: InputEvent) -> void:
 				_action_popup_visible = false
 				_bag_visible = false
 				queue_redraw()
-				item_action.emit(_action_item_idx, "equip_throwable")
+				var _is_dart: bool = _cur_item != null and _cur_item.item_type == Item.Type.MATERIAL_DART
+				item_action.emit(_action_item_idx, "use_dart" if _is_dart else "equip_throwable")
 			elif _action_discard_rect().has_point(p):
 				_action_popup_visible = false
 				_bag_visible = false
@@ -1143,7 +1144,8 @@ func _draw_action_popup() -> void:
 	var _is_equip_item: bool = _it != null and _it.is_equipment()
 	var _is_throw_item: bool = _it != null and _it.is_throwable()
 	if _is_throw_item:
-		_draw_action_btn(_action_use_rect(), "투척 장착", Color(0.18, 0.15, 0.35, 0.95))
+		var _is_dart_item: bool = _it != null and _it.item_type == Item.Type.MATERIAL_DART
+		_draw_action_btn(_action_use_rect(), "사용" if _is_dart_item else "투척 장착", Color(0.18, 0.15, 0.35, 0.95))
 		_draw_action_btn(_action_discard_rect(), "버리기", Color(0.36, 0.1, 0.1, 0.95))
 	else:
 		var _use_label := "장착" if _is_equip_item else "먹기 / 사용"
