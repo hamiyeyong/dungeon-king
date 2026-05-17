@@ -78,6 +78,8 @@ func _init_run() -> void:
 		player.hit_at.connect(_on_hit_at)
 	if not player.attacked_cell.is_connected(_on_player_attacked_cell):
 		player.attacked_cell.connect(_on_player_attacked_cell)
+	if not player.enemy_killed.is_connected(_on_player_enemy_killed):
+		player.enemy_killed.connect(_on_player_enemy_killed)
 	if not enemy_manager.player_attacked.is_connected(_on_enemy_attacked_player):
 		enemy_manager.player_attacked.connect(_on_enemy_attacked_player)
 	if not enemy_manager.all_cleared.is_connected(_on_all_cleared):
@@ -262,10 +264,12 @@ func _process_enemy_statuses() -> void:
 		if "화염" in r.sources:
 			_spawn_fire(r.pos)
 		if r.dead:
+			var kill_tile: Vector2i = e.tile_pos
 			var reward: int = 5 * player.floor_num
 			hud.add_log("%s 처치! EXP +%d" % [e.display_name, reward])
 			enemy_manager.remove_enemy(e)
 			player.gain_exp(reward)
+			_hunter_arrow_drop(kill_tile)
 
 func _on_enemy_attacked_player(atk_value: int, attacker_name: String) -> void:
 	_spawn_hit(player.position)
@@ -600,10 +604,12 @@ func _on_enemy_trap(tile_pos: Vector2i, enemy) -> void:
 	var dmg: int = enemy.take_damage(5)
 	hud.add_log("함정! %s에게 %d 피해!" % [enemy.display_name, dmg])
 	if enemy.is_dead():
+		var kill_tile: Vector2i = enemy.tile_pos
 		var reward: int = 5 * player.floor_num
 		hud.add_log("%s 처치! EXP +%d" % [enemy.display_name, reward])
 		enemy_manager.remove_enemy(enemy)
 		player.gain_exp(reward)
+		_hunter_arrow_drop(kill_tile)
 
 func _trigger_trap(pos: Vector2i) -> void:
 	var trap_type: int = _trap_data.get(pos, randi() % 10)
@@ -947,14 +953,27 @@ func _execute_throw(target_tile: Vector2i) -> void:
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
 
+func _hunter_arrow_drop(tile_pos: Vector2i) -> void:
+	if player.class_type != Player.ClassType.HUNTER:
+		return
+	if randi() % 100 < 30:
+		var arrow := Item.new()
+		arrow.item_type = Item.Type.MATERIAL_ARROW_WOOD
+		_pick_or_drop(arrow, tile_pos)
+
+func _on_player_enemy_killed(tile_pos: Vector2i) -> void:
+	_hunter_arrow_drop(tile_pos)
+
 func _apply_throw_damage(enemy, dmg: int, source: String) -> void:
 	var actual: int = enemy.take_damage(dmg)
 	hud.add_log("%s → %s에게 %d 피해!" % [source, enemy.display_name, actual])
 	if enemy.is_dead():
+		var kill_tile: Vector2i = enemy.tile_pos
 		var reward: int = 5 * player.floor_num
 		hud.add_log("%s 처치! EXP +%d" % [enemy.display_name, reward])
 		enemy_manager.remove_enemy(enemy)
 		player.gain_exp(reward)
+		_hunter_arrow_drop(kill_tile)
 
 # ── Game over / Clear ──────────────────────────────────────────────────────
 
@@ -1780,10 +1799,12 @@ func _spell_mp_cost(spell_id: String) -> int:
 	return max(1, base - (lv - 1))
 
 func _kill_enemy_reward(target) -> void:
+	var kill_tile: Vector2i = target.tile_pos
 	var reward: int = 5 * player.floor_num
 	hud.add_log("%s 처치! EXP +%d" % [target.display_name, reward])
 	enemy_manager.remove_enemy(target)
 	player.gain_exp(reward)
+	_hunter_arrow_drop(kill_tile)
 
 func _cast_magic_missile(target_tile: Vector2i) -> void:
 	player.spend_mp_for_spell(_spell_mp_cost("magic_missile"))
@@ -1922,9 +1943,11 @@ func _class_skill_warrior() -> void:
 				_spawn_hit(e.position)
 				var dmg: int = e.take_damage(player.atk)
 				if e.is_dead():
+					var kill_tile: Vector2i = e.tile_pos
 					hud.add_log("지면강타! %s 처치!" % e.display_name)
 					player.gain_exp(5 * player.floor_num)
 					enemy_manager.remove_enemy(e)
+					_hunter_arrow_drop(kill_tile)
 					break
 			hit_count += 1
 	if hit_count == 0:
@@ -1944,9 +1967,11 @@ func _class_skill_mage() -> void:
 			var dmg: int = e.take_damage(player.atk)
 			e.apply_status("frozen", FROZEN_TURNS + 1)
 			if e.is_dead():
+				var kill_tile: Vector2i = e.tile_pos
 				hud.add_log("얼음회오리! %s 처치!" % e.display_name)
 				player.gain_exp(5 * player.floor_num)
 				enemy_manager.remove_enemy(e)
+				_hunter_arrow_drop(kill_tile)
 			hit_count += 1
 	if hit_count == 0:
 		hud.add_log("얼음회오리! (범위 내 적 없음)")
@@ -1964,8 +1989,10 @@ func _class_skill_rogue() -> void:
 		e.take_damage(FLASH_DMG)
 		e.apply_status("blind", BLIND_TURNS_SKILL)
 		if e.is_dead():
+			var kill_tile: Vector2i = e.tile_pos
 			player.gain_exp(5 * player.floor_num)
 			enemy_manager.remove_enemy(e)
+			_hunter_arrow_drop(kill_tile)
 		hit_count += 1
 	if hit_count == 0:
 		hud.add_log("섬광탄! (층 내 적 없음)")
@@ -1988,15 +2015,19 @@ func _class_skill_hunter() -> void:
 	var target_name: String = nearest.display_name
 	var hit_count: int = randi() % 4 + 3  # 3~6
 	var total_dmg: int = 0
+	# 사냥꾼의 본능: 원거리 데미지 +15%
+	var shot_atk: int = int(player.atk * 1.15)
 	for _i in hit_count:
 		if not is_instance_valid(nearest):
 			break
 		_spawn_hit(nearest.position)
-		var dmg: int = nearest.take_damage(player.atk)
+		var dmg: int = nearest.take_damage(shot_atk)
 		total_dmg += dmg
 		if nearest.is_dead():
+			var kill_tile: Vector2i = nearest.tile_pos
 			player.gain_exp(5 * player.floor_num)
 			enemy_manager.remove_enemy(nearest)
+			_hunter_arrow_drop(kill_tile)
 			break
 	hud.add_log("난사! %s에게 %d연타, 총 %d 피해!" % [target_name, hit_count, total_dmg])
 
