@@ -333,8 +333,16 @@ func _pick_or_drop(item: Item, tile_pos: Vector2i) -> void:
 		_drop_item(item, tile_pos)
 		hud.add_log("%s 바닥에 떨어졌습니다." % item.get_display_name(true))
 	else:
+		# 잡학다식 룬: 9% 확률 자동 식별
+		if player.auto_identify_pct > 0 and item.color_idx >= 0 and \
+				item.color_idx < _identified.size() and not _identified[item.color_idx]:
+			if randi() % 100 < player.auto_identify_pct:
+				_identified[item.color_idx] = true
 		player.inventory.append(item)
-		hud.add_log("%s 획득!" % item.get_display_name(true))
+		var ident: bool = item.item_type != Item.Type.FOOD and \
+			item.color_idx >= 0 and item.color_idx < _identified.size() and \
+			_identified[item.color_idx]
+		hud.add_log("%s 획득!" % item.get_display_name(ident))
 
 func _on_all_cleared(pos: Vector2) -> void:
 	var fx = HIT_EFFECT_SCENE.instantiate()

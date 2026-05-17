@@ -81,7 +81,11 @@ var invincible_turns: int = 0
 var class_skill_cooldown: int = 0
 var _slow_skip: bool = false
 var _save_atk_bonus: int = 0  # SaveData 마일스톤 ATK 보너스 (recalc 시 반영)
-var crit_rune_pct: int = 0    # 장착 룬으로 추가된 크리티컬 확률 %
+var crit_rune_pct: int = 0         # 장착 룬 — 크리티컬 확률 %
+var shield_def_rune_pct: int = 0   # 장착 룬 — 방패 방어율 %
+var armor_def_rune_pct: int = 0    # 장착 룬 — 경갑 방어율 %
+var auto_identify_pct: int = 0     # 장착 룬 — 아이템 자동 식별 %
+var mage_mp_regen_rune: bool = false  # 장착 룬 — 경갑 시 MP 자연회복 증가
 var learned_spells: Dictionary = {}
 var regen_turns: int = 0
 var bark_shield: int = 0
@@ -167,6 +171,10 @@ func init(start_tile: Vector2i, map: Node) -> void:
 
 func apply_rune_effects() -> void:
 	crit_rune_pct = 0
+	shield_def_rune_pct = 0
+	armor_def_rune_pct = 0
+	auto_identify_pct = 0
+	mage_mp_regen_rune = false
 	for rune_id in SaveData.get_equipped_runes():
 		match rune_id:
 			"질긴_생명력":
@@ -174,6 +182,14 @@ func apply_rune_effects() -> void:
 				hp = max_hp
 			"전투_감각":
 				crit_rune_pct += 10
+			"방패_숙련":
+				shield_def_rune_pct += 12
+			"경갑_숙련":
+				armor_def_rune_pct += 12
+			"잡학다식":
+				auto_identify_pct += 9
+			"마법_친화":
+				mage_mp_regen_rune = true
 
 func learn_spell(spell_id: String) -> String:
 	if not SPELL_DATA.has(spell_id):
@@ -443,9 +459,15 @@ func _recalc_equip_stats() -> void:
 	# 전사 패시브: 근거리 무기 데미지 +15%
 	if class_type == ClassType.WARRIOR and equipped_weapon:
 		atk = int(atk * 1.15)
-	def_ = base_def + \
-		(equipped_shield.get_equip_def() if equipped_shield else 0) + \
-		(equipped_armor.get_equip_def()  if equipped_armor  else 0)
+	var shield_def: int = equipped_shield.get_equip_def() if equipped_shield else 0
+	if shield_def_rune_pct > 0 and equipped_shield:
+		shield_def = int(shield_def * (1.0 + shield_def_rune_pct / 100.0))
+	var armor_def: int = equipped_armor.get_equip_def() if equipped_armor else 0
+	var is_light_armor: bool = equipped_armor != null and \
+		equipped_armor.item_type == Item.Type.ARMOR_CLOTH
+	if armor_def_rune_pct > 0 and is_light_armor:
+		armor_def = int(armor_def * (1.0 + armor_def_rune_pct / 100.0))
+	def_ = base_def + shield_def + armor_def
 
 func _on_weapon_used() -> void:
 	if equipped_weapon:
@@ -554,7 +576,12 @@ func _on_step(consume_hunger: bool = true) -> void:
 
 	# MP 자연 회복 (피로도 정상일 때, 이동 턴에도 적용)
 	if consume_hunger and fatigue < 450 and mp < max_mp:
-		mp = min(max_mp, mp + 1)
+		var mp_regen: int = 1
+		# 마법_친화 룬: 경갑 착용 시 MP 자연회복 2배
+		if mage_mp_regen_rune and equipped_armor != null and \
+				equipped_armor.item_type == Item.Type.ARMOR_CLOTH:
+			mp_regen = 2
+		mp = min(max_mp, mp + mp_regen)
 	if regen_turns > 0:
 		regen_turns -= 1
 		var regen_hp: int = max(1, max_hp / 10)
