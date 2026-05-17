@@ -744,7 +744,7 @@ func _apply_scroll(sidx: int) -> void:
 			else:
 				hud.add_log("저주 해제 주문서! 저주받은 아이템이 없습니다.")
 
-func _try_enhance() -> String:
+func _try_enhance(bonus: int = 1) -> String:
 	# 무기 → 방패 → 갑옷 순서로 강화 대상 선택
 	var target: Item = player.equipped_weapon
 	if target == null:
@@ -755,7 +755,7 @@ func _try_enhance() -> String:
 		return ""
 	if target.enhance_level >= MAX_ENHANCE:
 		return ""
-	target.enhance_level += 1
+	target.enhance_level = min(MAX_ENHANCE, target.enhance_level + bonus)
 	var original_max: int = Item.EQUIPMENT_DATA[target.item_type][3]
 	target.max_durability = original_max
 	target.durability = original_max
@@ -817,7 +817,24 @@ func _on_item_action(idx: int, action: String) -> void:
 				_refresh_hud()
 				return
 			if item.item_type == Item.Type.SCROLL_ENHANCE:
-				var msg := _try_enhance()
+				# 저주 강화 두루마리: 70% 확률 발동 실패, 25% 확률로 저주 상태이상
+				if item.is_cursed and randf() < 0.70:
+					hud.add_log("저주 강화 두루마리! 발동에 실패했습니다. (턴 소모)")
+					if randf() < 0.25:
+						if randi() % 2 == 0:
+							player.curse_atk += 1
+							hud.add_log("저주에 걸렸습니다! ATK -1")
+						else:
+							player.curse_def += 1
+							player._recalc_equip_stats()
+							hud.add_log("저주에 걸렸습니다! DEF -1")
+					player.inventory.remove_at(idx)
+					hud.close_inventory()
+					_refresh_hud()
+					enemy_manager.do_turns(player.tile_pos)
+					return
+				var bonus_enhance: int = 2 if item.is_blessed else 1
+				var msg := _try_enhance(bonus_enhance)
 				if msg == "":
 					hud.add_log("장착된 무기가 없거나 최대 강화 상태입니다.")
 					hud.close_inventory()
