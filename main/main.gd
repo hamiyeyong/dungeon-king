@@ -1967,6 +1967,8 @@ func _give_class_starting_gear() -> void:
 		Player.ClassType.WARRIOR:
 			_equip_start_weapon(Item.Type.WEAPON_SHORTSWORD)
 			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			var food_w := Item.new(); food_w.item_type = Item.Type.FOOD
+			player.inventory.append(food_w)
 			for _i in 5:
 				var dart := Item.new(); dart.item_type = Item.Type.MATERIAL_DART
 				if player.inventory.size() < player.MAX_INVENTORY:
@@ -1974,6 +1976,8 @@ func _give_class_starting_gear() -> void:
 		Player.ClassType.MAGE:
 			_equip_start_weapon(Item.Type.WEAPON_STAFF)
 			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			var food_m := Item.new(); food_m.item_type = Item.Type.FOOD
+			player.inventory.append(food_m)
 			for _i in 5:
 				var dart := Item.new(); dart.item_type = Item.Type.MATERIAL_DART
 				if player.inventory.size() < player.MAX_INVENTORY:
@@ -1981,6 +1985,8 @@ func _give_class_starting_gear() -> void:
 		Player.ClassType.ROGUE:
 			_equip_start_weapon(Item.Type.WEAPON_DAGGER)
 			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			var food_r := Item.new(); food_r.item_type = Item.Type.FOOD
+			player.inventory.append(food_r)
 			for _i in 5:
 				var dart := Item.new(); dart.item_type = Item.Type.MATERIAL_DART
 				if player.inventory.size() < player.MAX_INVENTORY:
@@ -1988,6 +1994,8 @@ func _give_class_starting_gear() -> void:
 		Player.ClassType.HUNTER:
 			_equip_start_weapon(Item.Type.WEAPON_DAGGER)
 			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			var food_h := Item.new(); food_h.item_type = Item.Type.FOOD
+			player.inventory.append(food_h)
 			for _i in 5:
 				var arrow := Item.new(); arrow.item_type = Item.Type.MATERIAL_ARROW_WOOD
 				if player.inventory.size() < player.MAX_INVENTORY:
