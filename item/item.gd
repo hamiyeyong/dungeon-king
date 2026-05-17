@@ -22,6 +22,7 @@ enum Type {
 	ANCIENT_SCROLL_BARK_ARMOR,
 	ANCIENT_SCROLL_DISPEL,
 	MATERIAL_HERO_STONE,
+	BURNED_FOOD,
 }
 
 # 포션 색상별 스프라이트 (플레이어가 보는 것)
@@ -172,7 +173,7 @@ static func get_spell_id_for_type(t: int) -> String:
 	return ""
 
 func is_food() -> bool:
-	return item_type in [Type.FOOD, Type.COOKED_FOOD, Type.FOOD_ROTTEN]
+	return item_type in [Type.FOOD, Type.COOKED_FOOD, Type.FOOD_ROTTEN, Type.BURNED_FOOD]
 
 func get_equip_atk() -> int:
 	if not is_equipment() or not EQUIPMENT_DATA.has(item_type):
@@ -181,6 +182,8 @@ func get_equip_atk() -> int:
 	var total: int = EQUIPMENT_DATA[item_type][1] + (enhance_level if is_weapon() else 0)
 	if is_blessed:
 		total += 1
+	elif is_cursed:
+		total = max(0, total - 1)
 	return total if ratio > 0 else (total / 2)
 
 func get_equip_def() -> int:
@@ -190,6 +193,8 @@ func get_equip_def() -> int:
 	var total: int = EQUIPMENT_DATA[item_type][2] + (enhance_level if not is_weapon() else 0)
 	if is_blessed:
 		total += 1
+	elif is_cursed:
+		total = max(0, total - 1)
 	return total if ratio > 0 else (total / 2)
 
 func get_display_name(identified: bool) -> String:
@@ -202,6 +207,7 @@ func get_display_name(identified: bool) -> String:
 		Type.FOOD:             return "식량"
 		Type.COOKED_FOOD:      return "익은 식량"
 		Type.FOOD_ROTTEN:      return "상한 식량"
+		Type.BURNED_FOOD:      return "탄 식량"
 		Type.MATERIAL_BRANCH:  return "나뭇가지"
 		Type.MATERIAL_HERB:    return "약초"
 		Type.MATERIAL_STONE:   return "돌"
@@ -274,6 +280,8 @@ func get_modulate() -> Color:
 		return Color.WHITE
 	if item_type == Type.FOOD_ROTTEN:
 		return Color(0.55, 0.75, 0.4)
+	if item_type == Type.BURNED_FOOD:
+		return Color(0.35, 0.25, 0.15)
 	if is_ancient_scroll():
 		return Color(1.0, 0.85, 0.4)
 	if is_scroll():
@@ -287,6 +295,7 @@ func get_atlas() -> Vector2i:
 		Type.FOOD:             return FOOD_ATLAS
 		Type.COOKED_FOOD:      return COOKED_FOOD_ATLAS
 		Type.FOOD_ROTTEN:      return FOOD_ROTTEN_ATLAS
+		Type.BURNED_FOOD:      return COOKED_FOOD_ATLAS
 		Type.SCROLL_ENHANCE, Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY:
 			return SCROLL_ATLAS
 		Type.ANCIENT_SCROLL_MAGIC_MISSILE, Type.ANCIENT_SCROLL_NATURE_LIGHTNING, \
@@ -322,10 +331,20 @@ func apply(player) -> String:
 			player.stats_changed.emit()
 			return "배고픔 -%d%s" % [reduce, " [축복]" if is_blessed else ""]
 		Type.POTION_POISON:
+			if is_blessed:
+				var heal: int = 10
+				player.hp = min(player.max_hp, player.hp + heal) as int
+				player.stats_changed.emit()
+				return "축복 독 물약! 독 대신 HP +%d [축복]" % heal
 			player.apply_status("poison", POISON_TURNS)
 			player.stats_changed.emit()
 			return "독 상태이상! (%d턴)" % POISON_TURNS
 		Type.POTION_FIRE:
+			if is_blessed:
+				var mp_gain: int = 20
+				player.mp = min(player.max_mp, player.mp + mp_gain) as int
+				player.stats_changed.emit()
+				return "축복 화염 물약! 화염 대신 MP +%d [축복]" % mp_gain
 			player.apply_status("fire", FIRE_TURNS)
 			player.stats_changed.emit()
 			return "화상 상태이상! (%d턴)" % FIRE_TURNS
@@ -334,10 +353,15 @@ func apply(player) -> String:
 			player.fire_turns = 0
 			player.sleep_turns = 0
 			player.curse_atk = 0
+			player.curse_def = 0
 			player._recalc_equip_stats()
 			player.stats_changed.emit()
 			return "모든 상태이상 & 저주 해제!"
 		Type.POTION_SLEEP:
+			if is_blessed:
+				player.fatigue = max(0, player.fatigue - 300) as int
+				player.stats_changed.emit()
+				return "축복 수면 물약! 수면 대신 피로도 -300 [축복]"
 			player.apply_status("sleep", SLEEP_TURNS)
 			player.stats_changed.emit()
 			return "수면 상태이상! (%d턴)" % SLEEP_TURNS
@@ -355,6 +379,10 @@ func apply(player) -> String:
 			player.apply_status("poison", POISON_TURNS)
 			player.stats_changed.emit()
 			return "상한 식량 섭취! 배고픔 -20, 독 상태이상!"
+		Type.BURNED_FOOD:
+			player.hunger = max(0, player.hunger - 35)
+			player.stats_changed.emit()
+			return "탄 식량 섭취! 배고픔 -35"
 		Type.MATERIAL_RAW_MEAT:
 			player.hunger = max(0, player.hunger - 20) as int
 			player.stats_changed.emit()

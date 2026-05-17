@@ -553,12 +553,16 @@ func is_walkable(x: int, y: int) -> bool:
 	var cell: int = grid[y][x]
 	return cell not in [
 		Cell.WALL, Cell.CAMPFIRE, Cell.CAMPFIRE_OUT,
-		Cell.GRASS, Cell.JAR, Cell.DOOR,
+		Cell.JAR, Cell.DOOR,
 		Cell.WHITE_CAULDRON, Cell.BLACK_CAULDRON, Cell.MAGIC_WELL, Cell.MERCHANT,
 		Cell.SKULL_PILE, Cell.KNOWLEDGE_TABLET,
 		Cell.WIZARD_STATUE, Cell.WARRIOR_STATUE, Cell.ANGEL_STATUE,
 		Cell.BOOKSHELF,
 	]
+
+func is_herb_cell(x: int, y: int) -> bool:
+	var c: int = get_cell(x, y)
+	return c in [Cell.HERB_ICE, Cell.HERB_BLOOD_MOSS, Cell.HERB_GINSENG, Cell.HERB_NIGHTSHADE, Cell.HERB_AMBROSIA, Cell.HERB_MUSHROOM, Cell.HERB_MANDRAKE, Cell.HERB_FIREWORT, Cell.HERB_DREAMGRASS]
 
 func is_door(x: int, y: int) -> bool:
 	return get_cell(x, y) == Cell.DOOR

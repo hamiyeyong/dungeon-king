@@ -225,6 +225,14 @@ func _on_player_turn_done() -> void:
 
 	var cell: int = map.get_cell(player.tile_pos.x, player.tile_pos.y)
 
+	if cell == map.Cell.GRASS:
+		map.set_cell(player.tile_pos.x, player.tile_pos.y, map.Cell.FLOOR)
+		if randi() % 2 == 0:
+			_pick_or_drop(_pick_bush_drop(), player.tile_pos)
+			hud.add_log("수풀을 헤치고 지나갔습니다. 무언가 떨어졌습니다!")
+		else:
+			hud.add_log("수풀을 헤치고 지나갔습니다.")
+
 	if cell == map.Cell.CHEST:
 		_open_chest(player.tile_pos)
 
@@ -296,15 +304,9 @@ func _on_player_attacked_cell(tile_pos: Vector2i) -> void:
 func _pick_bush_drop() -> Item:
 	var mat := Item.new()
 	var roll: int = randi() % 100
-	if roll < 30:
-		mat.item_type = Item.Type.MATERIAL_BRANCH
-	elif roll < 55:
-		mat.item_type = Item.Type.MATERIAL_HERB
-	elif roll < 75:
-		mat.item_type = Item.Type.MATERIAL_STONE
-	elif roll < 90:
+	if roll < 40:
 		mat.item_type = Item.Type.MATERIAL_BOTTLE
-	elif roll < 97:
+	elif roll < 75:
 		var cidx: int = randi() % 6
 		mat.item_type = _potion_map[cidx]
 		mat.color_idx = cidx
@@ -313,9 +315,9 @@ func _pick_bush_drop() -> Item:
 		if sroll == 0:
 			mat.item_type = Item.Type.SCROLL_ENHANCE
 		else:
-			var sidx: int = sroll - 1  # 0=BASH, 1=TELEPORT, 2=IDENTIFY
+			var sidx: int = sroll - 1
 			mat.item_type = Item.SCROLL_TYPES[sidx]
-			mat.color_idx = 6 + sidx   # _identified[6/7/8]
+			mat.color_idx = 6 + sidx
 	return mat
 
 func _resolve_jar(tile_pos: Vector2i) -> void:
@@ -330,10 +332,14 @@ func _resolve_jar(tile_pos: Vector2i) -> void:
 		hud.add_log("항아리에서 몬스터가 튀어나왔습니다!")
 		enemy_manager.spawn_one_near(tile_pos, map, player.floor_num)
 	else:
-		player.curse_atk += 1
+		if randi() % 2 == 0:
+			player.curse_atk += 1
+			hud.add_log("저주에 걸렸습니다! ATK -1 (정화 물약으로 해제)")
+		else:
+			player.curse_def += 1
+			hud.add_log("저주에 걸렸습니다! DEF -1 (정화 물약으로 해제)")
 		player._recalc_equip_stats()
 		player.stats_changed.emit()
-		hud.add_log("저주에 걸렸습니다! ATK -1 (정화 물약으로 해제)")
 
 func _pick_or_drop(item: Item, tile_pos: Vector2i) -> void:
 	if player.inventory.size() >= player.MAX_INVENTORY:
@@ -777,8 +783,12 @@ func _on_item_action(idx: int, action: String) -> void:
 				return
 			if item.is_ancient_scroll():
 				var spell_id: String = Item.get_spell_id_for_type(item.item_type)
-				var msg: String = player.learn_spell(spell_id)
-				hud.add_log(msg)
+				if item.is_cursed and randf() < 0.35:
+					hud.add_log("저주 고대 주문서! 마법 습득에 실패했습니다.")
+					player.mp = min(player.max_mp, player.mp + 5)
+				else:
+					var msg: String = player.learn_spell(spell_id)
+					hud.add_log(msg)
 				player.inventory.remove_at(idx)
 				hud.close_inventory()
 				_refresh_hud()
@@ -794,6 +804,23 @@ func _on_item_action(idx: int, action: String) -> void:
 				if not was_identified:
 					hud.add_log("낡은 주문서의 정체가 밝혀졌다! → %s" % item.get_display_name(true))
 					_run_explore_xp += 50
+				# 저주 주문서: 높은 확률 발동 실패, 운 나쁘면 저주 상태이상
+				if item.is_cursed:
+					if randf() < 0.70:
+						hud.add_log("저주 주문서! 발동에 실패했습니다. (턴 소모)")
+						if randf() < 0.25:
+							if randi() % 2 == 0:
+								player.curse_atk += 1
+								hud.add_log("저주에 걸렸습니다! ATK -1")
+							else:
+								player.curse_def += 1
+								player._recalc_equip_stats()
+								hud.add_log("저주에 걸렸습니다! DEF -1")
+						player.inventory.remove_at(idx)
+						hud.close_inventory()
+						_refresh_hud()
+						enemy_manager.do_turns(player.tile_pos)
+						return
 				_apply_scroll(sidx)
 				player.inventory.remove_at(idx)
 				hud.close_inventory()
@@ -812,6 +839,15 @@ func _on_item_action(idx: int, action: String) -> void:
 				match item.item_type:
 					Item.Type.POTION_POISON: _spawn_poison(player.position)
 					Item.Type.POTION_FIRE:   _spawn_fire(player.position)
+				# 저주 물약: 기존 효과 + 저주 상태이상 (랜덤 스탯 1 감소)
+				if item.is_cursed and item.item_type in [Item.Type.POTION_HEAL, Item.Type.POTION_HUNGER, Item.Type.POTION_POISON, Item.Type.POTION_FIRE, Item.Type.POTION_CLEANSE, Item.Type.POTION_SLEEP]:
+					if randi() % 2 == 0:
+						player.curse_atk += 1
+						hud.add_log("저주 물약! ATK -1")
+					else:
+						player.curse_def += 1
+						player._recalc_equip_stats()
+						hud.add_log("저주 물약! DEF -1")
 				# 포션 사용 후 빈병 획득
 				if player.inventory.size() < player.MAX_INVENTORY - 1:
 					var bottle := Item.new()
@@ -820,6 +856,15 @@ func _on_item_action(idx: int, action: String) -> void:
 					hud.add_log("빈병을 얻었습니다.")
 			else:
 				hud.add_log(item.apply(player))
+				# 저주 음식: 낮은 확률로 저주 상태이상 (스탯 1 감소)
+				if item.is_cursed and item.is_food() and randf() < 0.35:
+					if randi() % 2 == 0:
+						player.curse_atk += 1
+						hud.add_log("저주 음식! ATK -1")
+					else:
+						player.curse_def += 1
+						player._recalc_equip_stats()
+						hud.add_log("저주 음식! DEF -1")
 		"disassemble":
 			var mat_count: int = randi() % 2 + 1
 			var mat_type: Item.Type
@@ -843,6 +888,10 @@ func _on_item_action(idx: int, action: String) -> void:
 
 # ── 던지기 ─────────────────────────────────────────────────────────────────
 
+func _is_throw_interactable(tile: Vector2i) -> bool:
+	var c: int = map.get_cell(tile.x, tile.y)
+	return c in [map.Cell.GRASS, map.Cell.JAR, map.Cell.HERB_ICE, map.Cell.HERB_BLOOD_MOSS, map.Cell.HERB_GINSENG, map.Cell.HERB_NIGHTSHADE, map.Cell.HERB_AMBROSIA, map.Cell.HERB_MUSHROOM, map.Cell.HERB_MANDRAKE, map.Cell.HERB_FIREWORT, map.Cell.HERB_DREAMGRASS]
+
 func _enter_throw_mode() -> void:
 	_throw_mode = true
 	player.input_blocked = true
@@ -853,7 +902,7 @@ func _enter_throw_mode() -> void:
 			if dist == 0 or dist > THROW_RANGE:
 				continue
 			var tile: Vector2i = player.tile_pos + Vector2i(dx, dy)
-			if map.is_walkable(tile.x, tile.y):
+			if map.is_walkable(tile.x, tile.y) or _is_throw_interactable(tile):
 				tiles.append(tile)
 	map.throw_highlight_tiles = tiles
 	map.queue_redraw()
@@ -873,7 +922,7 @@ func _on_throw_cancelled() -> void:
 
 func _execute_throw(target_tile: Vector2i) -> void:
 	var dist: int = abs(target_tile.x - player.tile_pos.x) + abs(target_tile.y - player.tile_pos.y)
-	if dist == 0 or dist > THROW_RANGE or not map.is_walkable(target_tile.x, target_tile.y):
+	if dist == 0 or dist > THROW_RANGE or (not map.is_walkable(target_tile.x, target_tile.y) and not _is_throw_interactable(target_tile)):
 		_exit_throw_mode()
 		hud.add_log("던지기 취소")
 		return
@@ -884,6 +933,66 @@ func _execute_throw(target_tile: Vector2i) -> void:
 		return
 
 	var item: Item = player.inventory[_throw_item_idx]
+
+	# 수풀/항아리/약초밭/함정 타일 직접 처리
+	var target_cell: int = map.get_cell(target_tile.x, target_tile.y)
+	var handled_tile: bool = false
+	if target_cell == map.Cell.GRASS:
+		map.set_cell(target_tile.x, target_tile.y, map.Cell.FLOOR)
+		hud.add_log("수풀에 던졌습니다. 수풀이 흩어집니다!")
+		_pick_or_drop(_pick_bush_drop(), target_tile)
+		handled_tile = true
+	elif target_cell == map.Cell.JAR:
+		map.set_cell(target_tile.x, target_tile.y, map.Cell.JAR_OPEN)
+		hud.add_log("항아리를 깨뜨렸습니다!")
+		_resolve_jar(target_tile)
+		handled_tile = true
+	elif target_cell == map.Cell.HERB_FIREWORT and item.item_type in [Item.Type.MATERIAL_RAW_MEAT, Item.Type.FOOD, Item.Type.COOKED_FOOD]:
+		# 화염초에 고기 던지면 요리
+		var cooked := Item.new()
+		match item.item_type:
+			Item.Type.MATERIAL_RAW_MEAT, Item.Type.FOOD:
+				cooked.item_type = Item.Type.COOKED_FOOD
+				hud.add_log("화염초 불꽃에 구워졌다! 익은 식량이 놓였다.")
+			Item.Type.COOKED_FOOD:
+				cooked.item_type = Item.Type.BURNED_FOOD
+				hud.add_log("화염초 불꽃에 한 번 더 구워졌다. 탄 식량이 됐다.")
+		_drop_item(cooked, target_tile)
+		handled_tile = true
+	elif target_cell in [map.Cell.HERB_ICE, map.Cell.HERB_BLOOD_MOSS, map.Cell.HERB_GINSENG, map.Cell.HERB_NIGHTSHADE, map.Cell.HERB_AMBROSIA, map.Cell.HERB_MUSHROOM, map.Cell.HERB_MANDRAKE, map.Cell.HERB_FIREWORT, map.Cell.HERB_DREAMGRASS]:
+		hud.add_log("수풀에 던졌습니다! 약초밭이 강제 발동됩니다.")
+		_trigger_herb(target_tile, target_cell)
+		handled_tile = true
+	elif target_cell == map.Cell.TRAP:
+		_trap_data.erase(target_tile)
+		map.set_cell(target_tile.x, target_tile.y, map.Cell.FLOOR)
+		hud.add_log("함정을 원격 발동시켜 해제했습니다!")
+		handled_tile = true
+	if handled_tile:
+		player.inventory.remove_at(_throw_item_idx)
+		_throw_item_idx = -1
+		_refresh_hud()
+		enemy_manager.do_turns(player.tile_pos)
+		return
+
+	# 맑은 샘 — 저주 아이템 던지면 저주 해제 (아이템 유지)
+	if target_cell == map.Cell.CLEAR_SPRING and item.is_cursed:
+		item.is_cursed = false
+		player._recalc_equip_stats()
+		hud.add_log("%s의 저주가 맑은 샘물에 씻겨 내려갔습니다!" % item.get_display_name(true))
+		_throw_item_idx = -1
+		_refresh_hud()
+		enemy_manager.do_turns(player.tile_pos)
+		return
+	# 맑은 샘 — 물약 던지면 효과 확인 (미확인 유지, 식별 안 됨)
+	if target_cell == map.Cell.CLEAR_SPRING and item.color_idx < _identified.size() and not item.is_equipment() and not item.is_material() and not item.is_food() and not item.is_scroll() and not item.is_ancient_scroll():
+		var true_name: String = item.get_display_name(true)
+		hud.add_log("%s 물약을 던졌습니다. 샘이 빛났습니다. → '%s' 효과입니다." % [Item.COLORS[item.color_idx], true_name])
+		player.inventory.remove_at(_throw_item_idx)
+		_throw_item_idx = -1
+		_refresh_hud()
+		enemy_manager.do_turns(player.tile_pos)
+		return
 
 	# 독/불은 던질 때 정체 공개
 	if item.item_type != Item.Type.FOOD and item.reveals_on_throw():
@@ -931,13 +1040,17 @@ func _execute_throw(target_tile: Vector2i) -> void:
 			else:
 				hud.add_log(item.get_display_name(true) + "이 허공에 깨졌다.")
 		Item.Type.POTION_CLEANSE:
-			var target = enemy_manager.get_enemy_at(target_tile)
-			if target:
-				_spawn_hit(target.position)
-				target.cleanse()
-				hud.add_log("%s의 상태이상이 해제되었다..." % target.display_name)
+			if target_cell == map.Cell.TAINTED_SPRING:
+				map.set_cell(target_tile.x, target_tile.y, map.Cell.CLEAR_SPRING)
+				hud.add_log("오염된 샘이 맑은 샘으로 변했다!")
 			else:
-				hud.add_log(item.get_display_name(true) + "이 깨졌다.")
+				var target = enemy_manager.get_enemy_at(target_tile)
+				if target:
+					_spawn_hit(target.position)
+					target.cleanse()
+					hud.add_log("%s의 상태이상이 해제되었다..." % target.display_name)
+				else:
+					hud.add_log(item.get_display_name(true) + "이 깨졌다.")
 		Item.Type.FOOD:
 			if map.get_cell(target_tile.x, target_tile.y) == map.Cell.CAMPFIRE:
 				var cooked := Item.new()
@@ -947,6 +1060,15 @@ func _execute_throw(target_tile: Vector2i) -> void:
 			else:
 				_drop_item(item, target_tile)
 				hud.add_log("식량이 바닥에 떨어졌다.")
+		Item.Type.MATERIAL_RAW_MEAT:
+			if map.get_cell(target_tile.x, target_tile.y) == map.Cell.CAMPFIRE:
+				var cooked := Item.new()
+				cooked.item_type = Item.Type.COOKED_FOOD
+				_drop_item(cooked, target_tile)
+				hud.add_log("생고기가 모닥불에 구워졌다! 익은 식량이 놓였다.")
+			else:
+				_drop_item(item, target_tile)
+				hud.add_log("생고기가 바닥에 떨어졌다.")
 		_:
 			if item.is_equipment() or item.is_material() or item.item_type == Item.Type.COOKED_FOOD:
 				_drop_item(item, target_tile)
@@ -1166,7 +1288,7 @@ func _on_campfire_action(action: String) -> void:
 			var food_indices: Array[int] = []
 			for i in player.inventory.size():
 				var it: Item = player.inventory[i]
-				if it.item_type == Item.Type.FOOD or it.item_type == Item.Type.COOKED_FOOD:
+				if it.item_type in [Item.Type.FOOD, Item.Type.COOKED_FOOD, Item.Type.MATERIAL_RAW_MEAT]:
 					food_indices.append(i)
 			if food_indices.is_empty():
 				hud.add_log("요리할 식량이 없습니다.")
@@ -1180,15 +1302,25 @@ func _on_campfire_cook_selected(item_idx: int) -> void:
 	if item_idx < 0 or item_idx >= player.inventory.size():
 		return
 	var item: Item = player.inventory[item_idx]
-	if item.item_type != Item.Type.FOOD:
-		hud.add_log("이 재료는 구울 수 없습니다.")
-		enemy_manager.do_turns(player.tile_pos)
-		return
+	var result := Item.new()
+	var log_msg: String
+	match item.item_type:
+		Item.Type.FOOD:
+			result.item_type = Item.Type.COOKED_FOOD
+			log_msg = "식량을 구웠습니다! 익은 식량 획득."
+		Item.Type.COOKED_FOOD:
+			result.item_type = Item.Type.BURNED_FOOD
+			log_msg = "이미 익은 식량을 더 구웠습니다... 탄 식량이 됐습니다."
+		Item.Type.MATERIAL_RAW_MEAT:
+			result.item_type = Item.Type.COOKED_FOOD
+			log_msg = "생고기를 구웠습니다! 익은 식량 획득."
+		_:
+			hud.add_log("이 재료는 구울 수 없습니다.")
+			enemy_manager.do_turns(player.tile_pos)
+			return
 	player.inventory.remove_at(item_idx)
-	var cooked := Item.new()
-	cooked.item_type = Item.Type.COOKED_FOOD
-	player.inventory.append(cooked)
-	hud.add_log("식량을 구웠습니다! 익은 식량 획득.")
+	player.inventory.append(result)
+	hud.add_log(log_msg)
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
 
@@ -1200,8 +1332,9 @@ func _do_camp(tile_pos: Vector2i) -> void:
 
 	player.fatigue = 0
 	player.hp = min(player.max_hp, player.hp + 5)
+	player.mp = player.max_mp
 	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.CAMPFIRE_OUT)
-	hud.add_log("야영! 피로도 완전 회복, HP +5")
+	hud.add_log("야영! 피로도 완전 회복, HP +5, MP 완전 회복")
 	hud.add_log("모닥불이 꺼졌습니다.")
 	_update_fov()
 	_refresh_hud()
@@ -1210,38 +1343,90 @@ func _do_camp(tile_pos: Vector2i) -> void:
 	tween.tween_property(fade_rect, "color:a", 0.0, 0.5)
 	await tween.finished
 	player.input_blocked = false
+
+	# 야영 후 낮은 확률로 나쁜 이벤트
+	if randi() % 100 < 20:
+		if randi() % 2 == 0:
+			# 몬스터 등장
+			enemy_manager.spawn_one_near(player.tile_pos, map, player.floor_num)
+			hud.add_log("잠결에 몬스터가 나타났다!")
+		else:
+			# 골드·재료·주문서 도난
+			var stealable: Array[int] = []
+			for i in player.inventory.size():
+				var it: Item = player.inventory[i]
+				if it.is_material() or it.is_scroll() or it.is_ancient_scroll():
+					stealable.append(i)
+			var gold_stolen: bool = player.gold > 0 and (stealable.is_empty() or randi() % 2 == 0)
+			if gold_stolen:
+				var stolen_amount: int = max(1, player.gold / 2)
+				player.gold -= stolen_amount
+				hud.add_log("잠결에 도둑이 골드 %dG를 훔쳐갔다!" % stolen_amount)
+			elif not stealable.is_empty():
+				var steal_idx: int = stealable[randi() % stealable.size()]
+				var stolen_item: Item = player.inventory[steal_idx]
+				hud.add_log("잠결에 도둑이 %s을(를) 훔쳐갔다!" % stolen_item.get_display_name(true))
+				player.inventory.remove_at(steal_idx)
+			else:
+				hud.add_log("수상한 발소리가 들렸지만 아무 일도 없었다.")
+		_refresh_hud()
+
 	enemy_manager.do_turns(player.tile_pos)
 
 # ── 꺼진 모닥불 재점화 ───────────────────────────────────────────────────────────
 
 func _on_campfire_out_approached(tile_pos: Vector2i) -> void:
-	var has_fuel := false
+	var has_branch := false
+	var has_firewort := false
+	var has_torch := false
 	for inv_item in player.inventory:
-		if inv_item.item_type == Item.Type.MATERIAL_BRANCH \
-				or inv_item.item_type == Item.Type.MATERIAL_TORCH:
-			has_fuel = true
-			break
-	if not has_fuel:
-		hud.add_log("재료가 없습니다. (나뭇가지 또는 횃불 필요)")
+		match inv_item.item_type:
+			Item.Type.MATERIAL_BRANCH: has_branch = true
+			Item.Type.MATERIAL_HERB_FIREWORT: has_firewort = true
+			Item.Type.MATERIAL_TORCH: has_torch = true
+	var can_wood: bool = has_branch and has_firewort
+	if not has_torch and not can_wood:
+		hud.add_log("재료가 없습니다. (나뭇가지+화염초 꽃잎 또는 횃불 필요)")
 		enemy_manager.do_turns(player.tile_pos)
 		return
-	hud.show_confirm("불을 피울까요?\n(나뭇가지 또는 횃불 소모)",
+	var cost_msg: String = "횃불 소모" if has_torch else "나뭇가지 + 화염초 꽃잎 소모"
+	hud.show_confirm("불을 피울까요?\n(%s)" % cost_msg,
 		_on_relight_confirmed.bind(tile_pos), _on_relight_cancelled)
 
 func _on_relight_confirmed(tile_pos: Vector2i) -> void:
-	# 나뭇가지 우선, 없으면 횃불 소모
-	var priority := [Item.Type.MATERIAL_BRANCH, Item.Type.MATERIAL_TORCH]
-	for fuel_type in priority:
-		for i in player.inventory.size():
-			var inv_item: Item = player.inventory[i]
-			if inv_item.item_type == fuel_type:
-				player.inventory.remove_at(i)
-				map.set_cell(tile_pos.x, tile_pos.y, map.Cell.CAMPFIRE)
-				hud.add_log("불을 피웠습니다!")
-				_update_fov()
-				_refresh_hud()
-				enemy_manager.do_turns(player.tile_pos)
-				return
+	# 횃불 우선, 없으면 나뭇가지+화염초 꽃잎 소모
+	for i in player.inventory.size():
+		if player.inventory[i].item_type == Item.Type.MATERIAL_TORCH:
+			player.inventory.remove_at(i)
+			map.set_cell(tile_pos.x, tile_pos.y, map.Cell.CAMPFIRE)
+			hud.add_log("불을 피웠습니다! (횃불 소모)")
+			_update_fov()
+			_refresh_hud()
+			enemy_manager.do_turns(player.tile_pos)
+			return
+	# 횃불 없음 → 나뭇가지 + 화염초 꽃잎
+	var branch_idx: int = -1
+	var firewort_idx: int = -1
+	for i in player.inventory.size():
+		var t: int = player.inventory[i].item_type
+		if t == Item.Type.MATERIAL_BRANCH and branch_idx < 0:
+			branch_idx = i
+		elif t == Item.Type.MATERIAL_HERB_FIREWORT and firewort_idx < 0:
+			firewort_idx = i
+	if branch_idx >= 0 and firewort_idx >= 0:
+		var to_remove: Array[int] = [branch_idx, firewort_idx]
+		to_remove.sort()
+		to_remove.reverse()
+		for idx in to_remove:
+			player.inventory.remove_at(idx)
+		map.set_cell(tile_pos.x, tile_pos.y, map.Cell.CAMPFIRE)
+		hud.add_log("불을 피웠습니다! (나뭇가지 + 화염초 꽃잎 소모)")
+		_update_fov()
+		_refresh_hud()
+		enemy_manager.do_turns(player.tile_pos)
+	else:
+		hud.add_log("재료가 부족합니다.")
+		enemy_manager.do_turns(player.tile_pos)
 
 func _on_relight_cancelled() -> void:
 	enemy_manager.do_turns(player.tile_pos)
@@ -1419,7 +1604,10 @@ func _trigger_spring(pos: Vector2i, cell: int) -> void:
 		player.sleep_turns = 0
 		player.paralyze_turns = 0
 		player.wound_turns = 0
-		hud.add_log("맑은 샘! HP +%d, MP +10, 상태이상 해제, 허기·피로 감소" % heal)
+		player.curse_atk = 0
+		player.curse_def = 0
+		player._recalc_equip_stats()
+		hud.add_log("맑은 샘! HP +%d, MP +10, 모든 상태이상·저주 해제, 허기·피로 감소" % heal)
 	_refresh_hud()
 	if player.hp <= 0:
 		_trigger_game_over()
@@ -1499,9 +1687,9 @@ func _trigger_herb(pos: Vector2i, cell: int) -> void:
 			hud.add_log("암브로시아밭! 무적 상태 (10턴).")
 			drop_type = Item.Type.MATERIAL_HERB_AMBROSIA
 		map.Cell.HERB_MUSHROOM:
-			var heal: int = randi_range(6, 10)
-			player.hp = min(player.max_hp, player.hp + heal)
-			hud.add_log("영지버섯밭! HP +%d 재생." % heal)
+			var regen_t: int = randi_range(4, 6)
+			player.herb_regen_turns = max(player.herb_regen_turns, regen_t)
+			hud.add_log("영지버섯밭! %d턴간 HP가 서서히 회복됩니다. (이동 시 해제)" % regen_t)
 			drop_type = Item.Type.MATERIAL_HERB_MUSHROOM
 		map.Cell.HERB_MANDRAKE:
 			if randi() % 5 == 0:
@@ -1522,11 +1710,10 @@ func _trigger_herb(pos: Vector2i, cell: int) -> void:
 			player.fatigue = max(0, player.fatigue - 150)
 			hud.add_log("꿈결초밭! HP -2, 수면 (%d턴), 피로도 -150." % Item.SLEEP_TURNS)
 			drop_type = Item.Type.MATERIAL_HERB_DREAMGRASS
-	if drop_type >= 0 and player.inventory.size() < player.MAX_INVENTORY:
+	if drop_type >= 0 and randi() % 2 == 0:
 		var herb_mat := Item.new()
 		herb_mat.item_type = drop_type
-		player.inventory.append(herb_mat)
-		hud.add_log("%s 획득!" % Item.get_type_name(drop_type))
+		_pick_or_drop(herb_mat, pos)
 	player.stats_changed.emit()
 	_refresh_hud()
 
@@ -1913,6 +2100,7 @@ func _cast_self_spell(spell_id: String) -> void:
 			player.wound_turns = 0
 			player.blind_turns = 0
 			player.curse_atk = 0
+			player.curse_def = 0
 			player._recalc_equip_stats()
 			hud.add_log("디스펠 Lv.%d! 모든 상태이상 & 저주 해제!" % lv)
 	player.stats_changed.emit()
