@@ -19,6 +19,7 @@ var poison_turns: int = 0
 var fire_turns: int = 0
 var sleep_turns: int = 0
 var is_boss: bool = false
+var is_alerted: bool = false
 var _hp_bar_timer: float = 0.0
 
 func init(pos: Vector2i, map: Node) -> void:
@@ -103,7 +104,7 @@ func ai_step(player_pos: Vector2i, occupied: Array) -> bool:
 	var dist: int = abs(dx) + abs(dy)
 	if dist == 1:
 		return true
-	if dist <= 8:
+	if dist <= 8 or is_alerted:
 		_move_toward(player_pos, occupied)
 	return false
 
