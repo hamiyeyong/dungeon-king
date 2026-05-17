@@ -29,6 +29,8 @@ signal campfire_cook_selected(item_idx: int) # 선택한 식량의 인벤 인덱
 signal merchant_buy(shop_idx: int)
 signal merchant_sell(inv_idx: int)
 signal well_item_selected(inv_idx: int)
+signal spell_slot_tapped
+signal spell_selected(spell_id: String)
 
 var hp := 20
 var max_hp := 20
@@ -81,6 +83,9 @@ var _merchant_sell_prices: Array[int] = []
 
 var _well_popup_visible := false
 var _well_popup_indices: Array[int] = []   # 우물에 바칠 수 있는 인벤 인덱스
+
+var _spell_popup_visible := false
+var _spell_popup_list: Array = []   # [{id, name, mp_cost}]
 
 var gold: int = 0
 
@@ -169,10 +174,20 @@ func is_any_popup_open() -> bool:
 	return _popup_visible or _bag_visible or _action_popup_visible or \
 		_equip_action_visible or _craft_visible or \
 		_campfire_popup_visible or _cook_popup_visible or \
-		_merchant_visible or _well_popup_visible
+		_merchant_visible or _well_popup_visible or _spell_popup_visible
 
 func set_throw_mode(active: bool) -> void:
 	_throw_mode = active
+	queue_redraw()
+
+func show_spell_popup(spells: Array) -> void:
+	_spell_popup_list = spells
+	_spell_popup_visible = true
+	queue_redraw()
+
+func close_spell_popup() -> void:
+	_spell_popup_visible = false
+	_spell_popup_list = []
 	queue_redraw()
 
 func show_well_popup(inv_indices: Array[int]) -> void:
@@ -323,6 +338,24 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	if _spell_popup_visible:
+		var spr := _spell_popup_rect()
+		if spr.has_point(p):
+			for i in _spell_popup_list.size():
+				if _spell_item_rect(i, spr).has_point(p):
+					var sd: Dictionary = _spell_popup_list[i]
+					_spell_popup_visible = false
+					_spell_popup_list = []
+					queue_redraw()
+					spell_selected.emit(sd.id)
+					get_viewport().set_input_as_handled()
+					return
+		_spell_popup_visible = false
+		_spell_popup_list = []
+		queue_redraw()
+		get_viewport().set_input_as_handled()
+		return
+
 	if _craft_visible:
 		var pr := _craft_popup_rect()
 		if pr.has_point(p):
@@ -426,6 +459,12 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# 마법 슬롯
+	if _skill_slot_rect(0).has_point(p):
+		spell_slot_tapped.emit()
+		get_viewport().set_input_as_handled()
+		return
+
 	# 제작
 	if _skill_slot_rect(1).has_point(p):
 		_craft_visible = true
@@ -456,6 +495,8 @@ func _draw() -> void:
 		_draw_campfire_popup()
 	if _cook_popup_visible:
 		_draw_cook_popup()
+	if _spell_popup_visible:
+		_draw_spell_popup()
 	if _popup_visible:
 		_draw_popup()
 	if _game_over_visible:
@@ -587,12 +628,12 @@ func _draw_bottom_bar() -> void:
 	draw_string(font, Vector2(br.position.x + br.size.x * 0.5, br.position.y + br.size.y * 0.5 + 5),
 		"가방", HORIZONTAL_ALIGNMENT_CENTER, -1, 11, Color(0.7, 0.85, 1.0))
 
-	# 스킬1 슬롯
+	# 마법 슬롯
 	var sk0 := _skill_slot_rect(0)
-	draw_rect(sk0, Color(0.15, 0.15, 0.15, 0.8))
-	draw_rect(sk0, Color(0.45, 0.4, 0.2, 0.8), false)
-	draw_string(font, Vector2(sk0.position.x + sk0.size.x * 0.5, sk0.position.y + sk0.size.y * 0.5 + 5),
-		"스킬1", HORIZONTAL_ALIGNMENT_CENTER, -1, 10, Color(0.7, 0.7, 0.7))
+	draw_rect(sk0, Color(0.08, 0.08, 0.22, 0.85))
+	draw_rect(sk0, Color(0.4, 0.4, 0.85, 0.8), false)
+	draw_string(font, Vector2(sk0.position.x, sk0.position.y + sk0.size.y * 0.5 + 5),
+		"마법", HORIZONTAL_ALIGNMENT_CENTER, sk0.size.x, 11, Color(0.7, 0.7, 1.0))
 	# 제작 버튼
 	var ck := _skill_slot_rect(1)
 	draw_rect(ck, Color(0.08, 0.18, 0.10, 0.9))
@@ -1128,3 +1169,37 @@ func _draw_merchant_popup() -> void:
 	draw_rect(close_btn, Color(0.6, 0.3, 0.3, 0.7), false)
 	draw_string(font, Vector2(close_btn.position.x, close_btn.position.y + close_btn.size.y * 0.5 + 5),
 		"닫기", HORIZONTAL_ALIGNMENT_CENTER, close_btn.size.x, 10, Color.WHITE)
+
+# ── Spell Popup ────────────────────────────────────────────────────────────
+
+func _spell_popup_rect() -> Rect2:
+	var count: int = max(1, _spell_popup_list.size())
+	var ph := 40.0 + count * 36.0 + 18.0
+	var pw := 240.0
+	return Rect2((W - pw) * 0.5, (H - ph) * 0.5, pw, ph)
+
+func _spell_item_rect(i: int, pr: Rect2) -> Rect2:
+	return Rect2(pr.position.x + 8, pr.position.y + 32 + i * 36, pr.size.x - 16, 32)
+
+func _draw_spell_popup() -> void:
+	var font := ThemeDB.fallback_font
+	var pr := _spell_popup_rect()
+	draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.45))
+	draw_rect(pr, Color(0.05, 0.07, 0.20, 0.97))
+	draw_rect(pr, Color(0.35, 0.35, 0.85, 0.8), false)
+	draw_string(font, Vector2(pr.position.x, pr.position.y + 22),
+		"마법 선택", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 13, Color("#9090ff"))
+	if _spell_popup_list.is_empty():
+		draw_string(font, Vector2(pr.position.x, pr.position.y + 50),
+			"배운 마법이 없습니다.", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 11, Color(0.55, 0.55, 0.55))
+	for i in _spell_popup_list.size():
+		var d: Dictionary = _spell_popup_list[i]
+		var r := _spell_item_rect(i, pr)
+		draw_rect(r, Color(0.10, 0.10, 0.28, 0.9))
+		draw_rect(r, Color(0.28, 0.28, 0.72, 0.7), false)
+		draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + 5),
+			d.name, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 68, 11, Color.WHITE)
+		draw_string(font, Vector2(r.position.x, r.position.y + r.size.y * 0.5 + 5),
+			"MP %d" % d.mp_cost, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 8, 10, Color("#66ccff"))
+	draw_string(font, Vector2(pr.position.x, pr.end.y - 8),
+		"영역 밖 터치로 취소", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.32, 0.32, 0.35))
