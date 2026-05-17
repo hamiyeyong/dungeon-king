@@ -14,6 +14,7 @@ enum Type {
 	MATERIAL_HERB_ICE, MATERIAL_HERB_BLOOD_MOSS, MATERIAL_HERB_GINSENG,
 	MATERIAL_HERB_NIGHTSHADE, MATERIAL_HERB_AMBROSIA, MATERIAL_HERB_MUSHROOM,
 	MATERIAL_HERB_MANDRAKE, MATERIAL_HERB_FIREWORT, MATERIAL_HERB_DREAMGRASS,
+	MATERIAL_HERB_GARLIC,
 	MATERIAL_DART, MATERIAL_ARROW_WOOD,
 	TOOL_REPAIR,
 	ANCIENT_SCROLL_MAGIC_MISSILE,
@@ -111,6 +112,7 @@ static func get_type_name(t: int) -> String:
 		Type.MATERIAL_HERB_MANDRAKE:     return "만드라고라 뿌리"
 		Type.MATERIAL_HERB_FIREWORT:     return "화염초 꽃잎"
 		Type.MATERIAL_HERB_DREAMGRASS:   return "꿈결초 꽃잎"
+		Type.MATERIAL_HERB_GARLIC:       return "생마늘"
 		Type.MATERIAL_DART:              return "다트"
 		Type.MATERIAL_ARROW_WOOD:        return "나무 화살"
 		Type.TOOL_REPAIR:                return "수리도구"
@@ -144,7 +146,7 @@ func is_equipment() -> bool:
 	return item_type >= Type.WEAPON_WOOD and item_type <= Type.ARMOR_LEATHER
 
 func is_material() -> bool:
-	return (item_type >= Type.MATERIAL_BRANCH and item_type <= Type.MATERIAL_HERB_DREAMGRASS) \
+	return (item_type >= Type.MATERIAL_BRANCH and item_type <= Type.MATERIAL_HERB_GARLIC) \
 		or item_type in [Type.MATERIAL_DART, Type.MATERIAL_ARROW_WOOD, Type.MATERIAL_HERO_STONE]
 
 func is_weapon() -> bool:
@@ -226,6 +228,7 @@ func get_display_name(identified: bool) -> String:
 		Type.MATERIAL_HERB_MANDRAKE:     return "만드라고라 뿌리"
 		Type.MATERIAL_HERB_FIREWORT:     return "화염초 꽃잎"
 		Type.MATERIAL_HERB_DREAMGRASS:   return "꿈결초 꽃잎"
+		Type.MATERIAL_HERB_GARLIC:       return "생마늘"
 		Type.MATERIAL_DART:              return "다트"
 		Type.MATERIAL_ARROW_WOOD:        return "나무 화살"
 		Type.TOOL_REPAIR:                return "수리도구"
@@ -310,7 +313,7 @@ func get_atlas() -> Vector2i:
 		Type.MATERIAL_ORE:     return Vector2i(7, 9)
 		Type.MATERIAL_BOTTLE:  return Vector2i(0, 7)
 		Type.MATERIAL_RAW_MEAT:        return Vector2i(7, 9)
-		Type.MATERIAL_HERB_ICE, Type.MATERIAL_HERB_BLOOD_MOSS, Type.MATERIAL_HERB_GINSENG, Type.MATERIAL_HERB_NIGHTSHADE, Type.MATERIAL_HERB_AMBROSIA, Type.MATERIAL_HERB_MUSHROOM, Type.MATERIAL_HERB_MANDRAKE, Type.MATERIAL_HERB_FIREWORT, Type.MATERIAL_HERB_DREAMGRASS:
+		Type.MATERIAL_HERB_ICE, Type.MATERIAL_HERB_BLOOD_MOSS, Type.MATERIAL_HERB_GINSENG, Type.MATERIAL_HERB_NIGHTSHADE, Type.MATERIAL_HERB_AMBROSIA, Type.MATERIAL_HERB_MUSHROOM, Type.MATERIAL_HERB_MANDRAKE, Type.MATERIAL_HERB_FIREWORT, Type.MATERIAL_HERB_DREAMGRASS, Type.MATERIAL_HERB_GARLIC:
 			return Vector2i(6, 8)
 		Type.MATERIAL_DART:            return Vector2i(1, 7)
 		Type.MATERIAL_ARROW_WOOD:      return Vector2i(1, 7)
@@ -323,8 +326,10 @@ func apply(player) -> String:
 		Type.POTION_HEAL:
 			var heal: int = 15 if is_blessed else 10
 			player.hp = min(player.max_hp, player.hp + heal) as int
+			if is_blessed:
+				player.regen_turns = max(player.regen_turns, 5)
 			player.stats_changed.emit()
-			return "HP +%d 회복%s" % [heal, " [축복]" if is_blessed else ""]
+			return "HP +%d 회복%s" % [heal, " + 재생 [축복]" if is_blessed else ""]
 		Type.POTION_HUNGER:
 			var reduce: int = 80 if is_blessed else 50
 			player.hunger = max(0, player.hunger - reduce) as int
@@ -352,6 +357,11 @@ func apply(player) -> String:
 			player.poison_turns = 0
 			player.fire_turns = 0
 			player.sleep_turns = 0
+			player.paralyze_turns = 0
+			player.frozen_turns = 0
+			player.slow_turns = 0
+			player.wound_turns = 0
+			player.blind_turns = 0
 			player.curse_atk = 0
 			player.curse_def = 0
 			player._recalc_equip_stats()

@@ -249,6 +249,7 @@ func _on_player_turn_done() -> void:
 		map.Cell.HERB_ICE, map.Cell.HERB_BLOOD_MOSS, map.Cell.HERB_GINSENG,
 		map.Cell.HERB_NIGHTSHADE, map.Cell.HERB_AMBROSIA, map.Cell.HERB_MUSHROOM,
 		map.Cell.HERB_MANDRAKE, map.Cell.HERB_FIREWORT, map.Cell.HERB_DREAMGRASS,
+		map.Cell.HERB_GARLIC,
 	]:
 		_trigger_herb(player.tile_pos, cell)
 
@@ -607,7 +608,7 @@ func _assign_trap_types() -> void:
 	for y in map.HEIGHT:
 		for x in map.WIDTH:
 			if map.get_cell(x, y) == map.Cell.TRAP:
-				_trap_data[Vector2i(x, y)] = randi() % 10
+				_trap_data[Vector2i(x, y)] = randi() % 11
 
 func _on_enemy_trap(tile_pos: Vector2i, enemy) -> void:
 	var trap_type: int = _trap_data.get(tile_pos, 0)
@@ -628,7 +629,7 @@ func _on_enemy_trap(tile_pos: Vector2i, enemy) -> void:
 		_hunter_arrow_drop(kill_tile)
 
 func _trigger_trap(pos: Vector2i) -> void:
-	var trap_type: int = _trap_data.get(pos, randi() % 10)
+	var trap_type: int = _trap_data.get(pos, randi() % 11)
 	# 스파이크 함정은 계속 활성
 	if trap_type != 3:
 		map.set_cell(pos.x, pos.y, map.Cell.FLOOR)
@@ -683,6 +684,17 @@ func _trigger_trap(pos: Vector2i) -> void:
 			for e in enemy_manager.enemies:
 				e.is_alerted = true
 			hud.add_log("알람 함정! 요란한 소리에 몬스터들이 몰려온다!")
+		10:  # 전격: 자신 + 주변 8칸 적 피해
+			player.take_damage(10, "전격 함정")
+			hud.add_log("전격 함정! HP -10 + 주변 적 피해!")
+			for dx in range(-1, 2):
+				for dy in range(-1, 2):
+					if dx == 0 and dy == 0:
+						continue
+					var e = enemy_manager.get_enemy_at(pos + Vector2i(dx, dy))
+					if e and is_instance_valid(e):
+						_spawn_hit(e.position)
+						_apply_throw_damage(e, 10, "전격")
 	_refresh_hud()
 	if player.hp <= 0:
 		_trigger_game_over()
@@ -900,7 +912,7 @@ func _on_item_action(idx: int, action: String) -> void:
 
 func _is_throw_interactable(tile: Vector2i) -> bool:
 	var c: int = map.get_cell(tile.x, tile.y)
-	return c in [map.Cell.GRASS, map.Cell.JAR, map.Cell.HERB_ICE, map.Cell.HERB_BLOOD_MOSS, map.Cell.HERB_GINSENG, map.Cell.HERB_NIGHTSHADE, map.Cell.HERB_AMBROSIA, map.Cell.HERB_MUSHROOM, map.Cell.HERB_MANDRAKE, map.Cell.HERB_FIREWORT, map.Cell.HERB_DREAMGRASS]
+	return c in [map.Cell.GRASS, map.Cell.JAR, map.Cell.HERB_ICE, map.Cell.HERB_BLOOD_MOSS, map.Cell.HERB_GINSENG, map.Cell.HERB_NIGHTSHADE, map.Cell.HERB_AMBROSIA, map.Cell.HERB_MUSHROOM, map.Cell.HERB_MANDRAKE, map.Cell.HERB_FIREWORT, map.Cell.HERB_DREAMGRASS, map.Cell.HERB_GARLIC]
 
 func _enter_throw_mode() -> void:
 	_throw_mode = true
@@ -969,7 +981,7 @@ func _execute_throw(target_tile: Vector2i) -> void:
 				hud.add_log("화염초 불꽃에 한 번 더 구워졌다. 탄 식량이 됐다.")
 		_drop_item(cooked, target_tile)
 		handled_tile = true
-	elif target_cell in [map.Cell.HERB_ICE, map.Cell.HERB_BLOOD_MOSS, map.Cell.HERB_GINSENG, map.Cell.HERB_NIGHTSHADE, map.Cell.HERB_AMBROSIA, map.Cell.HERB_MUSHROOM, map.Cell.HERB_MANDRAKE, map.Cell.HERB_FIREWORT, map.Cell.HERB_DREAMGRASS]:
+	elif target_cell in [map.Cell.HERB_ICE, map.Cell.HERB_BLOOD_MOSS, map.Cell.HERB_GINSENG, map.Cell.HERB_NIGHTSHADE, map.Cell.HERB_AMBROSIA, map.Cell.HERB_MUSHROOM, map.Cell.HERB_MANDRAKE, map.Cell.HERB_FIREWORT, map.Cell.HERB_DREAMGRASS, map.Cell.HERB_GARLIC]:
 		hud.add_log("수풀에 던졌습니다! 약초밭이 강제 발동됩니다.")
 		_trigger_herb(target_tile, target_cell)
 		handled_tile = true
@@ -1633,7 +1645,10 @@ func _trigger_spring(pos: Vector2i, cell: int) -> void:
 		player.fire_turns = 0
 		player.sleep_turns = 0
 		player.paralyze_turns = 0
+		player.frozen_turns = 0
+		player.slow_turns = 0
 		player.wound_turns = 0
+		player.blind_turns = 0
 		player.curse_atk = 0
 		player.curse_def = 0
 		player._recalc_equip_stats()
@@ -1740,6 +1755,20 @@ func _trigger_herb(pos: Vector2i, cell: int) -> void:
 			player.fatigue = max(0, player.fatigue - 150)
 			hud.add_log("꿈결초밭! HP -2, 수면 (%d턴), 피로도 -150." % Item.SLEEP_TURNS)
 			drop_type = Item.Type.MATERIAL_HERB_DREAMGRASS
+		map.Cell.HERB_GARLIC:
+			player.poison_turns = 0
+			player.fire_turns = 0
+			player.sleep_turns = 0
+			player.paralyze_turns = 0
+			player.frozen_turns = 0
+			player.slow_turns = 0
+			player.wound_turns = 0
+			player.blind_turns = 0
+			player.curse_atk = 0
+			player.curse_def = 0
+			player._recalc_equip_stats()
+			hud.add_log("마늘밭! 모든 상태이상 정화!")
+			drop_type = Item.Type.MATERIAL_HERB_GARLIC
 	if drop_type >= 0 and randi() % 2 == 0:
 		var herb_mat := Item.new()
 		herb_mat.item_type = drop_type
@@ -1805,18 +1834,26 @@ func _on_statue_approached(tile_pos: Vector2i, statue_type: String) -> void:
 	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
 	match statue_type:
 		"warrior":
-			if player.equipped_weapon:
-				player.equipped_weapon.enhance_level = min(
-					MAX_ENHANCE, player.equipped_weapon.enhance_level + 1)
-				player._recalc_equip_stats()
-				hud.add_log("전사의 석상! 무기가 +%d로 강화되었습니다." % player.equipped_weapon.enhance_level)
-			elif player.equipped_armor:
-				player.equipped_armor.enhance_level = min(
-					MAX_ENHANCE, player.equipped_armor.enhance_level + 1)
-				player._recalc_equip_stats()
-				hud.add_log("전사의 석상! 갑옷이 +%d로 강화되었습니다." % player.equipped_armor.enhance_level)
+			var warrior_hero_idx: int = -1
+			for i in player.inventory.size():
+				if player.inventory[i].item_type == Item.Type.MATERIAL_HERO_STONE:
+					warrior_hero_idx = i
+					break
+			if warrior_hero_idx < 0:
+				hud.add_log("전사의 석상: 영웅의 돌이 필요합니다.")
 			else:
-				hud.add_log("전사의 석상: 강화할 장착 장비가 없습니다.")
+				player.inventory.remove_at(warrior_hero_idx)
+				var warrior_eq: Item = player.equipped_weapon
+				if warrior_eq == null:
+					warrior_eq = player.equipped_shield
+				if warrior_eq == null:
+					warrior_eq = player.equipped_armor
+				if warrior_eq != null:
+					warrior_eq.enhance_level = min(MAX_ENHANCE, warrior_eq.enhance_level + 1)
+					player._recalc_equip_stats()
+					hud.add_log("전사의 석상! 영웅의 돌 소모. %s +%d 강화!" % [warrior_eq.get_display_name(true), warrior_eq.enhance_level])
+				else:
+					hud.add_log("전사의 석상: 강화할 장착 장비가 없습니다. (영웅의 돌 소모)")
 		"wizard":
 			_on_wizard_statue_approached()
 			return  # 팝업 선택 이후 do_turns
@@ -1838,10 +1875,34 @@ func _on_statue_approached(tile_pos: Vector2i, statue_type: String) -> void:
 					player.hp = min(player.hp + 3, player.max_hp)
 					hud.add_log("천사 석상의 가호! 최대 HP +3")
 				4:
-					hud.add_log("천사 석상이 조용히 빛났지만... 아무 일도 없었습니다.")
+					# 인벤토리 아이템 1개 랜덤 축복
+					var bless_candidates: Array[int] = []
+					for i in player.inventory.size():
+						if not player.inventory[i].is_blessed:
+							bless_candidates.append(i)
+					if not bless_candidates.is_empty():
+						var bidx: int = bless_candidates[randi() % bless_candidates.size()]
+						player.inventory[bidx].is_blessed = true
+						player.inventory[bidx].is_cursed = false
+						hud.add_log("천사 석상의 가호! %s을(를) 축복했습니다!" % player.inventory[bidx].get_display_name(true))
+					else:
+						player.max_hp += 1
+						player.hp = min(player.hp + 1, player.max_hp)
+						hud.add_log("천사 석상의 가호! 최대 HP +1")
 				5:
-					player.apply_status("paralyze", 2)
-					hud.add_log("천사 석상의 저주! 마비 2턴")
+					var stat_roll: int = randi() % 3
+					if stat_roll == 0:
+						player.max_hp += 2
+						player.hp = min(player.hp + 2, player.max_hp)
+						hud.add_log("천사 석상의 커다란 가호! 최대 HP +2")
+					elif stat_roll == 1:
+						player.hunger = max(0, player.hunger - 200)
+						player.hp = min(player.max_hp, player.hp + 5)
+						hud.add_log("천사 석상의 커다란 가호! 허기 -200, HP +5")
+					else:
+						player.mp = min(player.max_mp, player.mp + 30)
+						player.max_mp += 5
+						hud.add_log("천사 석상의 커다란 가호! MP +30, 최대 MP +5")
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
 
@@ -2136,7 +2197,20 @@ func _cast_self_spell(spell_id: String) -> void:
 			player.curse_atk = 0
 			player.curse_def = 0
 			player._recalc_equip_stats()
-			hud.add_log("디스펠 Lv.%d! 모든 상태이상 & 저주 해제!" % lv)
+			var dispel_uncursed: Item = null
+			for eq in [player.equipped_weapon, player.equipped_shield, player.equipped_armor]:
+				if eq != null and eq.is_cursed:
+					eq.is_cursed = false
+					dispel_uncursed = eq
+					break
+			if dispel_uncursed == null:
+				for inv_item: Item in player.inventory:
+					if inv_item.is_cursed:
+						inv_item.is_cursed = false
+						dispel_uncursed = inv_item
+						break
+			var dispel_extra := " + %s 저주 해제!" % dispel_uncursed.get_display_name(true) if dispel_uncursed else ""
+			hud.add_log("디스펠 Lv.%d! 모든 상태이상 & 저주 해제!%s" % [lv, dispel_extra])
 	player.stats_changed.emit()
 	_refresh_hud()
 	if player.hp <= 0:
