@@ -789,6 +789,19 @@ func _on_item_action(idx: int, action: String) -> void:
 					hud.add_log("빈병을 얻었습니다.")
 			else:
 				hud.add_log(item.apply(player))
+		"disassemble":
+			var mat_count: int = randi() % 2 + 1
+			var mat_type: Item.Type
+			if item.is_weapon():
+				mat_type = Item.Type.MATERIAL_ORE
+			else:
+				mat_type = Item.Type.MATERIAL_CLOTH if randi() % 2 == 0 else Item.Type.MATERIAL_ORE
+			for _i in mat_count:
+				if player.inventory.size() < player.MAX_INVENTORY:
+					var mat := Item.new()
+					mat.item_type = mat_type
+					player.inventory.append(mat)
+			hud.add_log("%s 분해! %s ×%d 획득" % [item.get_display_name(true), Item.get_type_name(mat_type), mat_count])
 		"discard":
 			var ident_discard: bool = item.item_type != Item.Type.FOOD and _identified[item.color_idx]
 			hud.add_log(item.get_display_name(ident_discard) + "을 버렸습니다.")

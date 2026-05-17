@@ -400,6 +400,11 @@ func _input(event: InputEvent) -> void:
 			_bag_visible = false
 			queue_redraw()
 			item_action.emit(_action_item_idx, "throw")
+		elif _is_equip and _action_disassemble_rect().has_point(p):
+			_action_popup_visible = false
+			_bag_visible = false
+			queue_redraw()
+			item_action.emit(_action_item_idx, "disassemble")
 		elif _action_discard_rect().has_point(p):
 			_action_popup_visible = false
 			_bag_visible = false
@@ -842,9 +847,14 @@ func _draw_craft_popup() -> void:
 	draw_string(font, Vector2(pr.position.x, pr.end.y - 7),
 		"영역 밖 터치로 닫기", HORIZONTAL_ALIGNMENT_CENTER, pr.size.x, 8, Color(0.35, 0.35, 0.35))
 
+func _action_is_equip() -> bool:
+	if _action_item_idx < 0 or _action_item_idx >= _inventory_items.size():
+		return false
+	return _inventory_items[_action_item_idx].is_equipment()
+
 func _draw_action_popup() -> void:
 	var font := ThemeDB.fallback_font
-	var pw := 180.0; var ph := 130.0
+	var pw := 180.0; var ph := 160.0 if _action_is_equip() else 130.0
 	var px := (W - pw) * 0.5; var py := (H - ph) * 0.5
 
 	draw_rect(Rect2(px, py, pw, ph), Color(0.05, 0.05, 0.08, 0.97))
@@ -862,9 +872,12 @@ func _draw_action_popup() -> void:
 
 	var _ai := _action_item_idx
 	var _it: Item = _inventory_items[_ai] if _ai < _inventory_items.size() else null
-	var _use_label := "장착" if (_it != null and _it.is_equipment()) else "먹기 / 사용"
+	var _is_equip_item: bool = _it != null and _it.is_equipment()
+	var _use_label := "장착" if _is_equip_item else "먹기 / 사용"
 	_draw_action_btn(_action_use_rect(),     _use_label, Color(0.14, 0.4,  0.14, 0.95))
 	_draw_action_btn(_action_throw_rect(),   "던지기",    Color(0.14, 0.25, 0.4,  0.95))
+	if _is_equip_item:
+		_draw_action_btn(_action_disassemble_rect(), "분해", Color(0.45, 0.28, 0.08, 0.95))
 	_draw_action_btn(_action_discard_rect(), "버리기",    Color(0.36, 0.1,  0.1,  0.95))
 
 func _draw_action_btn(r: Rect2, label: String, color: Color) -> void:
@@ -943,19 +956,25 @@ func _overlay_btn_rect() -> Rect2:
 	return Rect2(W * 0.5 - 70, H * 0.5 + 20, 140, 34)
 
 func _action_use_rect() -> Rect2:
-	var pw := 180.0; var ph := 130.0
+	var pw := 180.0; var ph := 160.0 if _action_is_equip() else 130.0
 	var px := (W - pw) * 0.5; var py := (H - ph) * 0.5
 	return Rect2(px + 12, py + 34, pw - 24, 26)
 
 func _action_throw_rect() -> Rect2:
-	var pw := 180.0; var ph := 130.0
+	var pw := 180.0; var ph := 160.0 if _action_is_equip() else 130.0
 	var px := (W - pw) * 0.5; var py := (H - ph) * 0.5
 	return Rect2(px + 12, py + 64, pw - 24, 26)
 
-func _action_discard_rect() -> Rect2:
-	var pw := 180.0; var ph := 130.0
+func _action_disassemble_rect() -> Rect2:
+	var pw := 180.0; var ph := 160.0
 	var px := (W - pw) * 0.5; var py := (H - ph) * 0.5
 	return Rect2(px + 12, py + 94, pw - 24, 26)
+
+func _action_discard_rect() -> Rect2:
+	var pw := 180.0; var ph := 160.0 if _action_is_equip() else 130.0
+	var px := (W - pw) * 0.5; var py := (H - ph) * 0.5
+	var btn_y := 124.0 if _action_is_equip() else 94.0
+	return Rect2(px + 12, py + btn_y, pw - 24, 26)
 
 func _equip_action_unequip_rect() -> Rect2:
 	var pw := 180.0; var ph := 90.0
