@@ -343,7 +343,7 @@ func _draw_header(font: Font) -> void:
 	draw_rect(Rect2(bar_x, bar_y, bar_w, bar_h), Color("#334466"), false)
 
 func _draw_tabs(font: Font) -> void:
-	const LABELS := ["직업 선택", "룬 관리", "고대 상점"]
+	const LABELS := ["직업 선택", "룬 관리", "상점"]
 	for i in 3:
 		var r := _tab_rect(i)
 		var active := (_tab == i)
@@ -543,7 +543,7 @@ func _draw_shop_tab(font: Font) -> void:
 		"고대의 주화: %d개" % SaveData.rune_coins,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#ffcc00"))
 	draw_string(font, Vector2(0, 150),
-		"고대 상점", HORIZONTAL_ALIGNMENT_CENTER, W, 11, Color("#aaaaaa"))
+		"상점", HORIZONTAL_ALIGNMENT_CENTER, W, 11, Color("#aaaaaa"))
 
 	# 등급 색상: 랜덤은 무지개 대신 흰색
 	const BOX_COLORS: Array = [
