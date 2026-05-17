@@ -1079,7 +1079,7 @@ func _execute_throw(target_tile: Vector2i) -> void:
 					var e = enemy_manager.get_enemy_at(target_tile + Vector2i(dx, dy))
 					if e and is_instance_valid(e):
 						_spawn_hit(e.position)
-						_apply_throw_damage(e, 5, item.get_display_name(true))
+						_apply_throw_damage(e, 8, item.get_display_name(true))
 						e.apply_status("poison", Item.POISON_TURNS)
 						hit_poison = true
 			if not hit_poison:
@@ -1147,14 +1147,7 @@ func _execute_throw(target_tile: Vector2i) -> void:
 				_drop_item(item, target_tile)
 				hud.add_log("생고기가 바닥에 떨어졌다.")
 		Item.Type.POTION_HEAL:
-			# 던질 때 1/3 효과 (적에게 맞으면 적을 회복)
-			var heal_throw: int = 3
-			var e_heal = enemy_manager.get_enemy_at(target_tile)
-			if e_heal and is_instance_valid(e_heal):
-				e_heal.hp = min(e_heal.max_hp, e_heal.hp + heal_throw)
-				hud.add_log("%s에게 회복 물약! HP +%d" % [e_heal.display_name, heal_throw])
-			else:
-				hud.add_log(item.get_display_name(_identified[item.color_idx]) + "이 깨졌습니다.")
+			hud.add_log(item.get_display_name(_identified[item.color_idx]) + "이 깨졌습니다.")
 		Item.Type.POTION_HUNGER:
 			hud.add_log(item.get_display_name(_identified[item.color_idx]) + "이 깨졌습니다.")
 		_:

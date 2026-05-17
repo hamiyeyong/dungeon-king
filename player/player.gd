@@ -93,6 +93,7 @@ var learned_spells: Dictionary = {}
 var regen_turns: int = 0
 var herb_regen_turns: int = 0
 var bark_shield: int = 0
+var _exhaustion_loss: int = 0  # 탈진으로 줄어든 최대 HP 누적 (피로도 정상화 시 서서히 회복)
 
 var input_blocked := false
 var hud_ref: Node = null
@@ -413,6 +414,7 @@ func _attack_enemy(enemy) -> void:
 	if fatigue >= 600:
 		max_hp = max(5, max_hp - 1)
 		hp = min(hp, max_hp)
+		_exhaustion_loss += 1
 		log_message.emit("탈진 상태! 최대 체력이 줄어들고 있습니다!")
 	var effective_atk: int = atk * next_atk_multiplier
 	if next_atk_multiplier > 1:
@@ -597,6 +599,13 @@ func _on_step(consume_hunger: bool = true) -> void:
 		fatigue = max(0, fatigue - 3)
 		if fatigue < 450 and mp < max_mp:
 			mp = min(max_mp, mp + 2)
+
+	# 탈진 해제 시 최대 HP 서서히 회복 (1/턴)
+	if fatigue < 600 and _exhaustion_loss > 0:
+		max_hp += 1
+		hp = min(hp + 1, max_hp)
+		_exhaustion_loss -= 1
+		log_message.emit("피로 회복 중. 최대 체력이 서서히 돌아옵니다.")
 
 	# MP 자연 회복 (피로도 정상일 때, 이동 턴에도 적용)
 	if consume_hunger and fatigue < 450 and mp < max_mp:

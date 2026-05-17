@@ -343,18 +343,20 @@ func apply(player) -> String:
 				player.hp = min(player.max_hp, player.hp + heal) as int
 				player.stats_changed.emit()
 				return "축복 독 물약! 독 대신 HP +%d [축복]" % heal
+			player.hp = max(1, player.hp - 5) as int
 			player.apply_status("poison", POISON_TURNS)
 			player.stats_changed.emit()
-			return "독 상태이상! (%d턴)" % POISON_TURNS
+			return "독 물약 마심! HP -5 + 독 상태이상! (%d턴)" % POISON_TURNS
 		Type.POTION_FIRE:
 			if is_blessed:
 				var mp_gain: int = 20
 				player.mp = min(player.max_mp, player.mp + mp_gain) as int
 				player.stats_changed.emit()
 				return "축복 화염 물약! 화염 대신 MP +%d [축복]" % mp_gain
+			player.hp = max(1, player.hp - 8) as int
 			player.apply_status("fire", FIRE_TURNS)
 			player.stats_changed.emit()
-			return "화상 상태이상! (%d턴)" % FIRE_TURNS
+			return "화염 물약 마심! HP -8 + 화상 상태이상! (%d턴)" % FIRE_TURNS
 		Type.POTION_CLEANSE:
 			player.poison_turns = 0
 			player.fire_turns = 0
@@ -378,7 +380,7 @@ func apply(player) -> String:
 			player.stats_changed.emit()
 			return "수면 상태이상! (%d턴)" % SLEEP_TURNS
 		Type.FOOD:
-			var reduce: int = 75 if is_blessed else 50
+			var reduce: int = 45 if is_blessed else 30
 			player.hunger = max(0, player.hunger - reduce) as int
 			if is_blessed and randf() < 0.15:
 				if randi() % 2 == 0:
@@ -393,9 +395,9 @@ func apply(player) -> String:
 			player.stats_changed.emit()
 			return "식량 섭취! 배고픔 -%d%s" % [reduce, " [축복]" if is_blessed else ""]
 		Type.COOKED_FOOD:
-			player.hunger = max(0, player.hunger - 40)
+			player.hunger = max(0, player.hunger - 60)
 			player.stats_changed.emit()
-			return "익은 식량 섭취! 배고픔 -40"
+			return "익은 식량 섭취! 배고픔 -60"
 		Type.FOOD_ROTTEN:
 			player.hunger = max(0, player.hunger - 15)
 			player.apply_status("poison", POISON_TURNS)
