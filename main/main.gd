@@ -482,6 +482,8 @@ func _do_floor_transition(direction: int) -> void:
 	SaveData.update_best_floor(player.floor_num)
 	if new_floor > MAX_FLOOR:
 		SaveData.award_chest(player.floor_num)
+		var coins: int = randi_range(player.floor_num * 3, player.floor_num * 7)
+		SaveData.award_coins(coins)
 		SaveData.add_explore_xp(_run_explore_xp)
 		_run_explore_xp = 0
 		_trigger_game_clear()
@@ -1322,6 +1324,8 @@ func _trigger_game_over() -> void:
 	player.input_blocked = true
 	SaveData.update_best_floor(player.floor_num)
 	SaveData.award_chest(player.floor_num)
+	var coins: int = randi_range(player.floor_num * 3, player.floor_num * 7)
+	SaveData.award_coins(coins)
 	SaveData.add_explore_xp(_run_explore_xp)
 	hud.add_log("탐험경험치 +%d XP 획득!" % _run_explore_xp)
 	_run_explore_xp = 0
