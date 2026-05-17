@@ -4,7 +4,7 @@ extends RefCounted
 enum Type {
 	POTION_HEAL, POTION_HUNGER, POTION_POISON, POTION_FIRE, POTION_CLEANSE, POTION_SLEEP,
 	FOOD, COOKED_FOOD, FOOD_ROTTEN,
-	SCROLL_ENHANCE, SCROLL_BASH, SCROLL_TELEPORT, SCROLL_IDENTIFY,
+	SCROLL_ENHANCE, SCROLL_BASH, SCROLL_TELEPORT, SCROLL_IDENTIFY, SCROLL_REMOVE_CURSE,
 	WEAPON_WOOD, WEAPON_STONE, WEAPON_IRON,
 	WEAPON_SHORTSWORD, WEAPON_STAFF, WEAPON_DAGGER,
 	SHIELD_WOOD, SHIELD_IRON,
@@ -57,9 +57,9 @@ const ANCIENT_SCROLL_TYPES: Array = [
 ]
 const RAW_MEAT_ATLAS    := Vector2i(7, 9)
 const COLORS := ["빨간색", "파란색", "초록색", "노란색", "보라색", "흰색"]
-const SCROLL_NAMES := ["강타 주문서", "순간이동 주문서", "식별 주문서"]
-# 주문서 타입 → 식별 인덱스 (potions 6개 다음 3개)
-const SCROLL_TYPES: Array = [Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY]
+const SCROLL_NAMES := ["강타 주문서", "순간이동 주문서", "식별 주문서", "저주 해제 주문서"]
+# 주문서 타입 → 식별 인덱스 (potions 6개 다음 4개)
+const SCROLL_TYPES: Array = [Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY, Type.SCROLL_REMOVE_CURSE]
 
 # 장비 정의: [이름, ATK보너스, DEF보너스, 내구도, atlas]
 const EQUIPMENT_DATA := {
@@ -92,9 +92,10 @@ static func get_type_name(t: int) -> String:
 		return EQUIPMENT_DATA[t][0]
 	match t:
 		Type.SCROLL_ENHANCE:   return "강화 두루마리"
-		Type.SCROLL_BASH:      return "강타 주문서"
-		Type.SCROLL_TELEPORT:  return "순간이동 주문서"
-		Type.SCROLL_IDENTIFY:  return "식별 주문서"
+		Type.SCROLL_BASH:         return "강타 주문서"
+		Type.SCROLL_TELEPORT:     return "순간이동 주문서"
+		Type.SCROLL_IDENTIFY:     return "식별 주문서"
+		Type.SCROLL_REMOVE_CURSE: return "저주 해제 주문서"
 		Type.MATERIAL_BRANCH:  return "나뭇가지"
 		Type.MATERIAL_HERB:    return "약초"
 		Type.MATERIAL_STONE:   return "돌"
@@ -160,7 +161,7 @@ func is_armor() -> bool:
 	return item_type in [Type.ARMOR_CLOTH, Type.ARMOR_LEATHER]
 
 func is_scroll() -> bool:
-	return item_type in [Type.SCROLL_ENHANCE, Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY]
+	return item_type in [Type.SCROLL_ENHANCE, Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY, Type.SCROLL_REMOVE_CURSE]
 
 func is_ancient_scroll() -> bool:
 	return item_type in ANCIENT_SCROLL_TYPES
@@ -263,7 +264,7 @@ func get_reveal_text() -> String:
 # 독/불/수면은 던질 때 즉시 공개, 주문서(강화 제외)도 던질 때 공개
 func reveals_on_throw() -> bool:
 	return item_type in [Type.POTION_POISON, Type.POTION_FIRE, Type.POTION_SLEEP] \
-		or item_type in [Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY]
+		or item_type in [Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY, Type.SCROLL_REMOVE_CURSE]
 
 func get_stat_label() -> String:
 	if not is_equipment() or not EQUIPMENT_DATA.has(item_type):
@@ -299,7 +300,7 @@ func get_atlas() -> Vector2i:
 		Type.COOKED_FOOD:      return COOKED_FOOD_ATLAS
 		Type.FOOD_ROTTEN:      return FOOD_ROTTEN_ATLAS
 		Type.BURNED_FOOD:      return COOKED_FOOD_ATLAS
-		Type.SCROLL_ENHANCE, Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY:
+		Type.SCROLL_ENHANCE, Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY, Type.SCROLL_REMOVE_CURSE:
 			return SCROLL_ATLAS
 		Type.ANCIENT_SCROLL_MAGIC_MISSILE, Type.ANCIENT_SCROLL_NATURE_LIGHTNING, \
 		Type.ANCIENT_SCROLL_REGENERATION, Type.ANCIENT_SCROLL_BARK_ARMOR, \
@@ -378,6 +379,16 @@ func apply(player) -> String:
 		Type.FOOD:
 			var reduce: int = 75 if is_blessed else 50
 			player.hunger = max(0, player.hunger - reduce) as int
+			if is_blessed and randf() < 0.15:
+				if randi() % 2 == 0:
+					player.max_hp += 1
+					player.hp = min(player.hp + 1, player.max_hp)
+					player.stats_changed.emit()
+					return "식량 섭취! 배고픔 -%d + 최대 HP +1 [축복]" % reduce
+				else:
+					player.max_mp += 5
+					player.stats_changed.emit()
+					return "식량 섭취! 배고픔 -%d + 최대 MP +5 [축복]" % reduce
 			player.stats_changed.emit()
 			return "식량 섭취! 배고픔 -%d%s" % [reduce, " [축복]" if is_blessed else ""]
 		Type.COOKED_FOOD:

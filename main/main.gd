@@ -15,7 +15,7 @@ const STATUS_EFFECT_SCENE := preload("res://fx/status_effect.tscn")
 
 # 물약 색상-효과 매핑 (런마다 셔플)
 var _potion_map: Array[Item.Type] = []
-var _identified: Array[bool] = [false, false, false, false, false, false, false, false, false]
+var _identified: Array[bool] = [false, false, false, false, false, false, false, false, false, false]
 
 # 던지기 타겟팅
 var _throw_mode := false
@@ -58,7 +58,7 @@ func _init_run() -> void:
 		Item.Type.POTION_SLEEP,
 	])
 	_potion_map.shuffle()
-	_identified.assign([false, false, false, false, false, false, false, false, false])
+	_identified.assign([false, false, false, false, false, false, false, false, false, false])
 	floor_items.clear()
 
 	map.generate(player.floor_num)
@@ -312,7 +312,7 @@ func _pick_bush_drop() -> Item:
 		mat.item_type = _potion_map[cidx]
 		mat.color_idx = cidx
 	else:
-		var sroll: int = randi() % 4
+		var sroll: int = randi() % 5
 		if sroll == 0:
 			mat.item_type = Item.Type.SCROLL_ENHANCE
 		else:
@@ -543,7 +543,7 @@ func _chest_give_slot_b() -> void:
 		if randi() % 4 == 0:
 			item.item_type = Item.ANCIENT_SCROLL_TYPES[randi() % Item.ANCIENT_SCROLL_TYPES.size()]
 		else:
-			var sidx: int = randi() % 3
+			var sidx: int = randi() % 4
 			item.item_type = Item.SCROLL_TYPES[sidx]
 			item.color_idx = 6 + sidx
 	elif roll < 11:
@@ -719,6 +719,24 @@ func _apply_scroll(sidx: int) -> void:
 		2:  # SCROLL_IDENTIFY
 			_identified.fill(true)
 			hud.add_log("식별 주문서! 모든 아이템이 식별되었습니다.")
+		3:  # SCROLL_REMOVE_CURSE
+			var curse_removed: Item = null
+			for eq in [player.equipped_weapon, player.equipped_shield, player.equipped_armor]:
+				if eq != null and eq.is_cursed:
+					eq.is_cursed = false
+					curse_removed = eq
+					break
+			if curse_removed == null:
+				for inv_item: Item in player.inventory:
+					if inv_item.is_cursed:
+						inv_item.is_cursed = false
+						curse_removed = inv_item
+						break
+			if curse_removed != null:
+				player._recalc_equip_stats()
+				hud.add_log("저주 해제 주문서! %s의 저주가 해제되었습니다!" % curse_removed.get_display_name(true))
+			else:
+				hud.add_log("저주 해제 주문서! 저주받은 아이템이 없습니다.")
 
 func _try_enhance() -> String:
 	# 무기 → 방패 → 갑옷 순서로 강화 대상 선택
@@ -817,7 +835,7 @@ func _on_item_action(idx: int, action: String) -> void:
 				return
 			if item.is_scroll():
 				var sidx: int = item.color_idx - 6
-				if sidx < 0 or sidx > 2:
+				if sidx < 0 or sidx > 3:
 					hud.add_log("알 수 없는 주문서입니다.")
 					hud.close_inventory()
 					return
@@ -1265,7 +1283,7 @@ func _create_shop_item() -> Item:
 			item.durability = Item.EQUIPMENT_DATA[etype][3]
 			item.max_durability = item.durability
 	elif roll < 7:
-		var sidx: int = randi() % 3
+		var sidx: int = randi() % 4
 		item.item_type = Item.SCROLL_TYPES[sidx]
 		item.color_idx = 6 + sidx
 	elif roll < 9:
@@ -1611,7 +1629,7 @@ func _create_well_transform(original: Item) -> Item:
 			result.durability = Item.EQUIPMENT_DATA[etype][3]
 			result.max_durability = result.durability
 	elif original.is_scroll():
-		var sidx: int = randi() % 3
+		var sidx: int = randi() % 4
 		result.item_type = Item.SCROLL_TYPES[sidx]
 		result.color_idx = 6 + sidx
 	elif original.is_food():
@@ -1688,7 +1706,7 @@ func _trigger_altar(pos: Vector2i, cell: int) -> void:
 				item.durability = Item.EQUIPMENT_DATA[t][3]
 				item.max_durability = item.durability
 		else:
-			var sidx: int = randi() % 3
+			var sidx: int = randi() % 4
 			item.item_type = Item.SCROLL_TYPES[sidx]
 			item.color_idx = 6 + sidx
 	player.inventory.append(item)
