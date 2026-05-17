@@ -28,6 +28,9 @@ var _run_explore_xp: int = 0
 
 var _campfire_tile_pos: Vector2i = Vector2i.ZERO
 
+var _spell_mode := false
+var _spell_id := ""
+
 # 상인 상점
 var _shop_items: Array[Dictionary] = []   # {item: Item, price: int, sold: bool}
 
@@ -127,6 +130,10 @@ func _init_run() -> void:
 		player.statue_approached.connect(_on_statue_approached)
 	if not player.bookshelf_approached.is_connected(_on_bookshelf_approached):
 		player.bookshelf_approached.connect(_on_bookshelf_approached)
+	if not hud.spell_slot_tapped.is_connected(_on_spell_slot_tapped):
+		hud.spell_slot_tapped.connect(_on_spell_slot_tapped)
+	if not hud.spell_selected.is_connected(_on_spell_selected):
+		hud.spell_selected.connect(_on_spell_selected)
 
 	# 탐험경험치 마일스톤 보너스 적용
 	_run_explore_xp = 0
@@ -160,7 +167,7 @@ func _process(_delta: float) -> void:
 # ── 던지기 타겟팅 입력 ──────────────────────────────────────────────────────
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not _throw_mode:
+	if not _throw_mode and not _spell_mode:
 		return
 	var world_pos: Vector2
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -170,7 +177,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	else:
 		return
 	var tile := Vector2i(int(world_pos.x / 32), int(world_pos.y / 32))
-	_execute_throw(tile)
+	if _throw_mode:
+		_execute_throw(tile)
+	else:
+		_execute_spell(tile)
 	get_viewport().set_input_as_handled()
 
 # ── Turn flow ──────────────────────────────────────────────────────────────
@@ -376,6 +386,10 @@ func _on_wait_requested() -> void:
 		_exit_throw_mode()
 		hud.add_log("던지기 취소")
 		return
+	if _spell_mode:
+		_exit_spell_mode()
+		hud.add_log("마법 시전 취소")
+		return
 	player.do_wait()
 
 # ── Gold ───────────────────────────────────────────────────────────────────
@@ -491,10 +505,13 @@ func _chest_give_slot_b() -> void:
 			item.durability = Item.EQUIPMENT_DATA[etype][3]
 			item.max_durability = item.durability
 	elif roll < 6:
-		# 주문서
-		var sidx: int = randi() % 3
-		item.item_type = Item.SCROLL_TYPES[sidx]
-		item.color_idx = 6 + sidx
+		# 주문서 (일반 or 고대)
+		if randi() % 4 == 0:
+			item.item_type = Item.ANCIENT_SCROLL_TYPES[randi() % Item.ANCIENT_SCROLL_TYPES.size()]
+		else:
+			var sidx: int = randi() % 3
+			item.item_type = Item.SCROLL_TYPES[sidx]
+			item.color_idx = 6 + sidx
 	else:
 		# 재료
 		var mat_types: Array = [
@@ -719,6 +736,14 @@ func _on_item_action(idx: int, action: String) -> void:
 					hud.add_log("장착된 무기가 없거나 최대 강화 상태입니다.")
 					hud.close_inventory()
 					return
+				hud.add_log(msg)
+				player.inventory.remove_at(idx)
+				hud.close_inventory()
+				_refresh_hud()
+				return
+			if item.is_ancient_scroll():
+				var spell_id: String = Item.get_spell_id_for_type(item.item_type)
+				var msg: String = player.learn_spell(spell_id)
 				hud.add_log(msg)
 				player.inventory.remove_at(idx)
 				hud.close_inventory()
@@ -1598,6 +1623,143 @@ func _equip_start_armor(atype: int) -> void:
 		a.durability = Item.EQUIPMENT_DATA[atype][3]
 		a.max_durability = a.durability
 	player.equip(a)
+
+# ── 마법 시스템 ────────────────────────────────────────────────────────────────
+
+func _on_spell_slot_tapped() -> void:
+	if player.learned_spells.is_empty():
+		hud.add_log("배운 마법이 없습니다. 고대 주문서를 사용해 마법을 배우세요.")
+		return
+	var list: Array = []
+	for spell_id in player.learned_spells.keys():
+		if not Player.SPELL_DATA.has(spell_id):
+			continue
+		var data: Array = Player.SPELL_DATA[spell_id]
+		list.append({"id": spell_id, "name": data[0], "mp_cost": data[1]})
+	hud.show_spell_popup(list)
+
+func _on_spell_selected(spell_id: String) -> void:
+	if not Player.SPELL_DATA.has(spell_id):
+		return
+	var data: Array = Player.SPELL_DATA[spell_id]
+	var is_targeted: bool = data[2]
+	if is_targeted:
+		_enter_spell_mode(spell_id)
+	else:
+		_cast_self_spell(spell_id)
+
+func _enter_spell_mode(spell_id: String) -> void:
+	_spell_mode = true
+	_spell_id = spell_id
+	player.input_blocked = true
+	var tiles: Array[Vector2i] = []
+	for dy in range(-THROW_RANGE, THROW_RANGE + 1):
+		for dx in range(-THROW_RANGE, THROW_RANGE + 1):
+			var dist: int = abs(dx) + abs(dy)
+			if dist == 0 or dist > THROW_RANGE:
+				continue
+			var tile: Vector2i = player.tile_pos + Vector2i(dx, dy)
+			if map.is_walkable(tile.x, tile.y):
+				tiles.append(tile)
+	map.throw_highlight_tiles = tiles
+	map.queue_redraw()
+	hud.set_throw_mode(true)
+	hud.add_log("마법 타겟을 선택하세요.")
+
+func _exit_spell_mode() -> void:
+	_spell_mode = false
+	_spell_id = ""
+	player.input_blocked = false
+	map.throw_highlight_tiles = []
+	map.queue_redraw()
+	hud.set_throw_mode(false)
+
+func _execute_spell(target_tile: Vector2i) -> void:
+	var dist: int = abs(target_tile.x - player.tile_pos.x) + abs(target_tile.y - player.tile_pos.y)
+	if dist == 0 or dist > THROW_RANGE or not map.is_walkable(target_tile.x, target_tile.y):
+		_exit_spell_mode()
+		hud.add_log("마법 시전 취소")
+		return
+	var sid: String = _spell_id
+	_exit_spell_mode()
+	match sid:
+		"magic_missile":    _cast_magic_missile(target_tile)
+		"nature_lightning": _cast_nature_lightning(target_tile)
+	if player.hp <= 0:
+		_trigger_game_over()
+		return
+	enemy_manager.do_turns(player.tile_pos)
+
+func _cast_magic_missile(target_tile: Vector2i) -> void:
+	player.spend_mp_for_spell(Player.SPELL_DATA["magic_missile"][1])
+	if player.hp <= 0:
+		return
+	var dmg: int = 5 + player.int_stat
+	var target = enemy_manager.get_enemy_at(target_tile)
+	if target:
+		_spawn_hit(target.position)
+		var actual: int = target.take_damage(dmg)
+		hud.add_log("매직 미사일! %s에게 %d 피해!" % [target.display_name, actual])
+		if target.is_dead():
+			var reward: int = 5 * player.floor_num
+			hud.add_log("%s 처치! EXP +%d" % [target.display_name, reward])
+			enemy_manager.remove_enemy(target)
+			player.gain_exp(reward)
+	else:
+		hud.add_log("매직 미사일이 빗나갔다!")
+	_refresh_hud()
+
+func _cast_nature_lightning(target_tile: Vector2i) -> void:
+	player.spend_mp_for_spell(Player.SPELL_DATA["nature_lightning"][1])
+	if player.hp <= 0:
+		return
+	var dmg: int = 7 + player.int_stat
+	var target = enemy_manager.get_enemy_at(target_tile)
+	if target:
+		_spawn_hit(target.position)
+		var actual: int = target.take_damage(dmg)
+		hud.add_log("자연의 번개! %s에게 %d 피해!" % [target.display_name, actual])
+		if randi() % 100 < 20:
+			target.apply_status("paralyze", 2)
+			hud.add_log("번개에 기절! (2턴)")
+		if target.is_dead():
+			var reward: int = 5 * player.floor_num
+			hud.add_log("%s 처치! EXP +%d" % [target.display_name, reward])
+			enemy_manager.remove_enemy(target)
+			player.gain_exp(reward)
+	else:
+		hud.add_log("번개가 허공에 떨어졌다!")
+	_refresh_hud()
+
+func _cast_self_spell(spell_id: String) -> void:
+	match spell_id:
+		"regeneration":
+			player.spend_mp_for_spell(Player.SPELL_DATA["regeneration"][1])
+			player.regen_turns = 5
+			hud.add_log("재생 마법! 5턴간 HP가 서서히 회복됩니다.")
+		"bark_armor":
+			player.spend_mp_for_spell(Player.SPELL_DATA["bark_armor"][1])
+			player.bark_shield = player.max_hp / 5
+			hud.add_log("나무껍질 갑옷! 방어막 %d 생성!" % player.bark_shield)
+		"dispel":
+			player.spend_mp_for_spell(Player.SPELL_DATA["dispel"][1])
+			player.poison_turns = 0
+			player.fire_turns = 0
+			player.sleep_turns = 0
+			player.paralyze_turns = 0
+			player.frozen_turns = 0
+			player.slow_turns = 0
+			player.wound_turns = 0
+			player.blind_turns = 0
+			player.curse_atk = 0
+			player._recalc_equip_stats()
+			hud.add_log("디스펠! 모든 상태이상 & 저주 해제!")
+	player.stats_changed.emit()
+	_refresh_hud()
+	if player.hp <= 0:
+		_trigger_game_over()
+		return
+	enemy_manager.do_turns(player.tile_pos)
 
 func _on_home_requested() -> void:
 	get_tree().call_deferred("change_scene_to_file", "res://home/home.tscn")

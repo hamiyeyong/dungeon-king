@@ -16,6 +16,11 @@ enum Type {
 	MATERIAL_HERB_MANDRAKE, MATERIAL_HERB_FIREWORT, MATERIAL_HERB_DREAMGRASS,
 	MATERIAL_DART, MATERIAL_ARROW_WOOD,
 	TOOL_REPAIR,
+	ANCIENT_SCROLL_MAGIC_MISSILE,
+	ANCIENT_SCROLL_NATURE_LIGHTNING,
+	ANCIENT_SCROLL_REGENERATION,
+	ANCIENT_SCROLL_BARK_ARMOR,
+	ANCIENT_SCROLL_DISPEL,
 }
 
 # 포션 색상별 스프라이트 (플레이어가 보는 것)
@@ -39,6 +44,14 @@ const FOOD_ATLAS        := Vector2i(6, 9)
 const COOKED_FOOD_ATLAS := Vector2i(7, 8)
 const FOOD_ROTTEN_ATLAS := Vector2i(6, 9)   # 상한 식량은 같은 스프라이트에 modulate 적용
 const SCROLL_ATLAS      := Vector2i(0, 8)   # 모든 주문서 공통 아이콘
+const ANCIENT_SCROLL_ATLAS := Vector2i(0, 8)
+const ANCIENT_SCROLL_TYPES: Array = [
+	Type.ANCIENT_SCROLL_MAGIC_MISSILE,
+	Type.ANCIENT_SCROLL_NATURE_LIGHTNING,
+	Type.ANCIENT_SCROLL_REGENERATION,
+	Type.ANCIENT_SCROLL_BARK_ARMOR,
+	Type.ANCIENT_SCROLL_DISPEL,
+]
 const RAW_MEAT_ATLAS    := Vector2i(7, 9)
 const COLORS := ["빨간색", "파란색", "초록색", "노란색", "보라색", "흰색"]
 const SCROLL_NAMES := ["강타 주문서", "순간이동 주문서", "식별 주문서"]
@@ -100,6 +113,11 @@ static func get_type_name(t: int) -> String:
 		Type.MATERIAL_ARROW_WOOD:        return "나무 화살"
 		Type.TOOL_REPAIR:                return "수리도구"
 		Type.FOOD_ROTTEN:                return "상한 식량"
+		Type.ANCIENT_SCROLL_MAGIC_MISSILE:    return "고대 주문서: 매직 미사일"
+		Type.ANCIENT_SCROLL_NATURE_LIGHTNING: return "고대 주문서: 자연의 번개"
+		Type.ANCIENT_SCROLL_REGENERATION:     return "고대 주문서: 재생"
+		Type.ANCIENT_SCROLL_BARK_ARMOR:       return "고대 주문서: 나무껍질 갑옷"
+		Type.ANCIENT_SCROLL_DISPEL:           return "고대 주문서: 디스펠"
 	return "?"
 
 const POISON_DMG_PER_TURN := 2
@@ -137,6 +155,18 @@ func is_armor() -> bool:
 
 func is_scroll() -> bool:
 	return item_type in [Type.SCROLL_ENHANCE, Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY]
+
+func is_ancient_scroll() -> bool:
+	return item_type in ANCIENT_SCROLL_TYPES
+
+static func get_spell_id_for_type(t: int) -> String:
+	match t:
+		Type.ANCIENT_SCROLL_MAGIC_MISSILE:    return "magic_missile"
+		Type.ANCIENT_SCROLL_NATURE_LIGHTNING: return "nature_lightning"
+		Type.ANCIENT_SCROLL_REGENERATION:     return "regeneration"
+		Type.ANCIENT_SCROLL_BARK_ARMOR:       return "bark_armor"
+		Type.ANCIENT_SCROLL_DISPEL:           return "dispel"
+	return ""
 
 func is_food() -> bool:
 	return item_type in [Type.FOOD, Type.COOKED_FOOD, Type.FOOD_ROTTEN]
@@ -186,6 +216,8 @@ func get_display_name(identified: bool) -> String:
 		Type.MATERIAL_DART:              return "다트"
 		Type.MATERIAL_ARROW_WOOD:        return "나무 화살"
 		Type.TOOL_REPAIR:                return "수리도구"
+	if is_ancient_scroll():
+		return get_type_name(item_type)
 	if is_scroll():
 		return _scroll_display_name(identified)
 	if identified:
@@ -235,6 +267,8 @@ func get_modulate() -> Color:
 		return Color.WHITE
 	if item_type == Type.FOOD_ROTTEN:
 		return Color(0.55, 0.75, 0.4)
+	if is_ancient_scroll():
+		return Color(1.0, 0.85, 0.4)
 	if is_scroll():
 		return Color(0.85, 0.95, 1.0)
 	return POTION_MODULATE[color_idx]
@@ -248,6 +282,10 @@ func get_atlas() -> Vector2i:
 		Type.FOOD_ROTTEN:      return FOOD_ROTTEN_ATLAS
 		Type.SCROLL_ENHANCE, Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY:
 			return SCROLL_ATLAS
+		Type.ANCIENT_SCROLL_MAGIC_MISSILE, Type.ANCIENT_SCROLL_NATURE_LIGHTNING, \
+		Type.ANCIENT_SCROLL_REGENERATION, Type.ANCIENT_SCROLL_BARK_ARMOR, \
+		Type.ANCIENT_SCROLL_DISPEL:
+			return ANCIENT_SCROLL_ATLAS
 		Type.MATERIAL_BRANCH:  return Vector2i(5, 9)
 		Type.MATERIAL_HERB:    return Vector2i(6, 8)
 		Type.MATERIAL_STONE:   return Vector2i(7, 9)

@@ -32,6 +32,14 @@ var sprite: AnimatedSprite2D
 enum ClassType { WARRIOR = 0, MAGE = 1, ROGUE = 2, HUNTER = 3 }
 var class_type: int = ClassType.WARRIOR
 
+const SPELL_DATA: Dictionary = {
+	"magic_missile":    ["매직 미사일", 8, true],
+	"nature_lightning": ["자연의 번개", 10, true],
+	"regeneration":     ["재생", 6, false],
+	"bark_armor":       ["나무껍질 갑옷", 8, false],
+	"dispel":           ["디스펠", 4, false],
+}
+
 # 기본 스탯 (힘/민첩/체력/지능/운)
 var str_stat: int = 10
 var agi_stat: int = 10
@@ -73,6 +81,9 @@ var invincible_turns: int = 0
 var _slow_skip: bool = false
 var _save_atk_bonus: int = 0  # SaveData 마일스톤 ATK 보너스 (recalc 시 반영)
 var crit_rune_pct: int = 0    # 장착 룬으로 추가된 크리티컬 확률 %
+var learned_spells: Dictionary = {}
+var regen_turns: int = 0
+var bark_shield: int = 0
 
 var input_blocked := false
 var hud_ref: Node = null
@@ -135,6 +146,9 @@ func init(start_tile: Vector2i, map: Node) -> void:
 	gold = 0
 	next_atk_multiplier = 1
 	crit_rune_pct = 0
+	learned_spells.clear()
+	regen_turns = 0
+	bark_shield = 0
 	# 직업별 스탯 초기화
 	class_type = SaveData.selected_class
 	var cs: Array[int] = _class_stats(class_type)
@@ -158,6 +172,24 @@ func apply_rune_effects() -> void:
 				hp = max_hp
 			"전투_감각":
 				crit_rune_pct += 10
+
+func learn_spell(spell_id: String) -> String:
+	if not SPELL_DATA.has(spell_id):
+		return "알 수 없는 마법입니다."
+	if learned_spells.has(spell_id):
+		return "%s 마법은 이미 알고 있습니다." % SPELL_DATA[spell_id][0]
+	learned_spells[spell_id] = 1
+	return "%s 마법을 배웠습니다!" % SPELL_DATA[spell_id][0]
+
+func spend_mp_for_spell(cost: int) -> void:
+	if mp >= cost:
+		mp -= cost
+	else:
+		var hp_cost: int = cost - mp
+		mp = 0
+		hp = max(0, hp - hp_cost)
+		log_message.emit("MP 부족! HP %d 소모." % hp_cost)
+	stats_changed.emit()
 
 static func _class_stats(ct: int) -> Array[int]:
 	match ct:
@@ -458,6 +490,16 @@ func take_damage(amount: int, attacker: String = "적") -> void:
 		log_message.emit("%s의 공격을 회피했습니다!" % attacker)
 		return
 	var dmg: int = max(1, amount - def_)
+	if bark_shield > 0:
+		var absorbed: int = min(bark_shield, dmg)
+		bark_shield -= absorbed
+		dmg -= absorbed
+		if absorbed > 0:
+			log_message.emit("방어막 %d 흡수! (남은 방어막: %d)" % [absorbed, bark_shield])
+		if dmg <= 0:
+			_on_armor_hit()
+			stats_changed.emit()
+			return
 	hp = max(0, hp - dmg)
 	log_message.emit("%s에게 %d 피해를 입었습니다." % [attacker, dmg])
 	if sleep_turns > 0:
@@ -511,6 +553,12 @@ func _on_step(consume_hunger: bool = true) -> void:
 	# MP 자연 회복 (피로도 정상일 때, 이동 턴에도 적용)
 	if consume_hunger and fatigue < 450 and mp < max_mp:
 		mp = min(max_mp, mp + 1)
+	if regen_turns > 0:
+		regen_turns -= 1
+		var regen_hp: int = max(1, max_hp / 10)
+		hp = min(max_hp, hp + regen_hp)
+		var regen_suffix := " (%d턴 남음)" % regen_turns if regen_turns > 0 else " (해제)"
+		log_message.emit("재생! HP +%d%s" % [regen_hp, regen_suffix])
 	if sleep_turns > 0:
 		sleep_turns -= 1
 		var suffix := " (%d턴 남음)" % sleep_turns if sleep_turns > 0 else " (해제)"
