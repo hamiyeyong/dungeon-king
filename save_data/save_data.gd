@@ -9,6 +9,7 @@ var selected_class: int = 0  # 0=전사 1=마법사 2=도적 3=사냥꾼
 # 룬 경제
 var rune_coins: int = 0
 var rune_fragments: Dictionary = {}   # {rune_id: count}
+var rune_levels: Dictionary = {}      # {rune_id: level}  0 = 미강화
 var rune_equipped: Array = []         # [rune_id, ...] 최대 5슬롯, "" = 빈 슬롯
 var pending_chest: Dictionary = {}    # {} = 없음, {"grade":int,"frags":{...},"coins":int}
 
@@ -34,6 +35,7 @@ const RUNE_GRADE_EPIC    := 2
 const RUNE_GRADE_LEGEND  := 3
 
 const RUNE_GRADE_NAMES: Array[String] = ["일반", "희귀", "에픽", "레전드"]
+const RUNE_MAX_LEVELS: Array[int] = [60, 35, 12, 5]  # 일반/희귀/에픽/레전드
 const RUNE_GRADE_COLORS: Array = [
 	Color("#aaaaaa"), Color("#4499ff"), Color("#cc44ff"), Color("#ffcc00")
 ]
@@ -212,6 +214,35 @@ func toggle_rune_equip(rune_id: String) -> void:
 				return
 		equip_rune(0, rune_id)
 
+func get_rune_level(rune_id: String) -> int:
+	return rune_levels.get(rune_id, 0) as int
+
+func get_rune_max_level(rune_id: String) -> int:
+	if not RUNE_DEFS.has(rune_id): return 0
+	var grade: int = (RUNE_DEFS[rune_id] as Array)[1]
+	return RUNE_MAX_LEVELS[grade]
+
+# 다음 레벨 강화 비용 → [frags, coins]
+# 레벨이 오를수록 비용 증가: frags = 1 + level/3, coins = 5 + level*5
+func get_upgrade_cost(rune_id: String) -> Array:
+	var level: int = get_rune_level(rune_id)
+	return [1 + level / 3, 5 + level * 5]
+
+func can_upgrade_rune(rune_id: String) -> bool:
+	if get_rune_level(rune_id) >= get_rune_max_level(rune_id): return false
+	var cost: Array = get_upgrade_cost(rune_id)
+	return (rune_fragments.get(rune_id, 0) as int) >= (cost[0] as int) \
+		and rune_coins >= (cost[1] as int)
+
+func upgrade_rune(rune_id: String) -> bool:
+	if not can_upgrade_rune(rune_id): return false
+	var cost: Array = get_upgrade_cost(rune_id)
+	rune_fragments[rune_id] = (rune_fragments.get(rune_id, 0) as int) - (cost[0] as int)
+	rune_coins -= cost[1] as int
+	rune_levels[rune_id] = get_rune_level(rune_id) + 1
+	_save()
+	return true
+
 func get_equipped_runes() -> Array:
 	var result: Array = []
 	for rid in rune_equipped:
@@ -261,6 +292,7 @@ func _save() -> void:
 	cfg.set_value("progress", "selected_class", selected_class)
 	cfg.set_value("runes", "coins", rune_coins)
 	cfg.set_value("runes", "fragments", rune_fragments)
+	cfg.set_value("runes", "levels", rune_levels)
 	cfg.set_value("runes", "equipped", rune_equipped)
 	cfg.set_value("runes", "pending_chest", pending_chest)
 	cfg.save(SAVE_PATH)
@@ -274,5 +306,6 @@ func _load() -> void:
 	selected_class = cfg.get_value("progress", "selected_class", 0)
 	rune_coins = cfg.get_value("runes", "coins", 0)
 	rune_fragments = cfg.get_value("runes", "fragments", {})
+	rune_levels = cfg.get_value("runes", "levels", {})
 	rune_equipped = cfg.get_value("runes", "equipped", [])
 	pending_chest = cfg.get_value("runes", "pending_chest", {})
