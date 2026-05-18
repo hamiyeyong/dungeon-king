@@ -40,6 +40,8 @@ enum Type {
 	ANCIENT_SCROLL_DISPEL,
 	MATERIAL_HERO_STONE,
 	BURNED_FOOD,
+	FROZEN_FOOD,
+	ROASTED_HERB,
 }
 
 # 포션 색상별 스프라이트 (플레이어가 보는 것)
@@ -330,7 +332,13 @@ func is_throwable() -> bool:
 	return item_type in [Type.MATERIAL_DART, Type.MATERIAL_ARROW_WOOD]
 
 func is_food() -> bool:
-	return item_type in [Type.FOOD, Type.COOKED_FOOD, Type.FOOD_ROTTEN, Type.BURNED_FOOD]
+	return item_type in [Type.FOOD, Type.COOKED_FOOD, Type.FOOD_ROTTEN, Type.BURNED_FOOD, Type.FROZEN_FOOD, Type.ROASTED_HERB]
+
+func is_potion() -> bool:
+	return item_type >= Type.POTION_HEAL and item_type <= Type.POTION_EXP
+
+func is_wood() -> bool:
+	return item_type in [Type.MATERIAL_BRANCH, Type.MATERIAL_ARROW_WOOD, Type.SHIELD_1, Type.WEAPON_MARTIAL_1]
 
 func get_equip_atk_min() -> int:
 	if not is_weapon() or not EQUIPMENT_DATA.has(item_type):
@@ -381,6 +389,8 @@ func get_display_name(identified: bool) -> String:
 		Type.COOKED_FOOD:      return "익은 식량"
 		Type.FOOD_ROTTEN:      return "상한 식량"
 		Type.BURNED_FOOD:      return "탄 식량"
+		Type.FROZEN_FOOD:      return "언 식량"
+		Type.ROASTED_HERB:     return "구운 약초"
 		Type.MATERIAL_BRANCH:  return "나뭇가지"
 		Type.MATERIAL_HERB:    return "약초"
 		Type.MATERIAL_STONE:   return "돌"
@@ -461,6 +471,10 @@ func get_modulate() -> Color:
 		return Color(0.55, 0.75, 0.4)
 	if item_type == Type.BURNED_FOOD:
 		return Color(0.35, 0.25, 0.15)
+	if item_type == Type.FROZEN_FOOD:
+		return Color(0.6, 0.85, 1.0)
+	if item_type == Type.ROASTED_HERB:
+		return Color(0.7, 0.9, 0.5)
 	if is_ancient_scroll():
 		return Color(1.0, 0.85, 0.4)
 	if is_scroll():
@@ -475,6 +489,8 @@ func get_atlas() -> Vector2i:
 		Type.COOKED_FOOD:      return COOKED_FOOD_ATLAS
 		Type.FOOD_ROTTEN:      return FOOD_ROTTEN_ATLAS
 		Type.BURNED_FOOD:      return COOKED_FOOD_ATLAS
+		Type.FROZEN_FOOD:      return FOOD_ATLAS
+		Type.ROASTED_HERB:     return FOOD_ATLAS
 		Type.SCROLL_ENHANCE, Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY, Type.SCROLL_REMOVE_CURSE:
 			return SCROLL_ATLAS
 		Type.ANCIENT_SCROLL_MAGIC_MISSILE, Type.ANCIENT_SCROLL_NATURE_LIGHTNING, \
@@ -609,6 +625,14 @@ func apply(player) -> String:
 			player.hunger = max(0, player.hunger - 25)
 			player.stats_changed.emit()
 			return "탄 식량 섭취! 배고픔 -25"
+		Type.FROZEN_FOOD:
+			player.hunger = max(0, player.hunger - 35) as int
+			player.stats_changed.emit()
+			return "언 식량 섭취! 배고픔 -35"
+		Type.ROASTED_HERB:
+			player.hunger = max(0, player.hunger - 20) as int
+			player.stats_changed.emit()
+			return "구운 약초 섭취! 배고픔 -20"
 		Type.MATERIAL_RAW_MEAT:
 			player.hunger = max(0, player.hunger - 15) as int
 			player.stats_changed.emit()

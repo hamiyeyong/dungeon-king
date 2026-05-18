@@ -1109,7 +1109,7 @@ func _on_item_action(idx: int, action: String) -> void:
 				_refresh_hud()
 				enemy_manager.do_turns(player.tile_pos)
 				return
-			if item.item_type != Item.Type.FOOD and item.item_type != Item.Type.COOKED_FOOD:
+			if not item.is_food():
 				var was_identified: bool = _identified[item.color_idx]
 				_identified[item.color_idx] = true
 				if not was_identified:
@@ -1261,26 +1261,62 @@ func _execute_throw(target_tile: Vector2i) -> void:
 		hud.add_log("항아리를 깨뜨렸습니다!")
 		_resolve_jar(target_tile)
 		handled_tile = true
-	elif target_cell == map.Cell.HERB_FIREWORT and item.item_type in [Item.Type.MATERIAL_RAW_MEAT, Item.Type.FOOD, Item.Type.COOKED_FOOD]:
-		# 화염초에 고기 던지면 요리
-		var cooked := Item.new()
-		match item.item_type:
-			Item.Type.MATERIAL_RAW_MEAT, Item.Type.FOOD:
-				cooked.item_type = Item.Type.COOKED_FOOD
-				hud.add_log("화염초 불꽃에 구워졌다! 익은 식량이 놓였다.")
-			Item.Type.COOKED_FOOD:
-				cooked.item_type = Item.Type.BURNED_FOOD
-				hud.add_log("화염초 불꽃에 한 번 더 구워졌다. 탄 식량이 됐다.")
-		_drop_item(cooked, target_tile)
-		handled_tile = true
 	elif target_cell in [map.Cell.HERB_ICE, map.Cell.HERB_BLOOD_MOSS, map.Cell.HERB_GINSENG, map.Cell.HERB_NIGHTSHADE, map.Cell.HERB_AMBROSIA, map.Cell.HERB_MUSHROOM, map.Cell.HERB_MANDRAKE, map.Cell.HERB_FIREWORT, map.Cell.HERB_DREAMGRASS, map.Cell.HERB_GARLIC]:
-		if dist <= 1:
-			hud.add_log("수풀에 던졌습니다! 약초밭이 강제 발동됩니다.")
-			_trigger_herb(target_tile, target_cell)
+		map.set_cell(target_tile.x, target_tile.y, map.Cell.FLOOR)
+		var drop_type: int = _herb_cell_drop_type(target_cell)
+		if drop_type >= 0 and randi() % 2 == 0:
+			var herb_mat := Item.new()
+			herb_mat.item_type = drop_type
+			_pick_or_drop(herb_mat, target_tile)
+		var new_item: Item = null
+		var item_burns := false
+		match target_cell:
+			map.Cell.HERB_FIREWORT:
+				if item.is_wood():
+					item_burns = true
+					hud.add_log(item.get_display_name(true) + "이 화염초 불꽃에 타버렸다!")
+				elif item.item_type == Item.Type.MATERIAL_RAW_MEAT:
+					new_item = Item.new()
+					new_item.item_type = Item.Type.COOKED_FOOD
+					hud.add_log("화염초 불꽃에 구워졌다! 익은 식량이 됐다.")
+				elif item.item_type in [Item.Type.FOOD, Item.Type.COOKED_FOOD]:
+					new_item = Item.new()
+					new_item.item_type = Item.Type.BURNED_FOOD
+					hud.add_log("화염초 불꽃에 타버렸다. 탄 식량이 됐다.")
+				elif Item.HERB_POTION_MAP.has(item.item_type):
+					new_item = Item.new()
+					new_item.item_type = Item.Type.ROASTED_HERB
+					hud.add_log("화염초 열기에 약초가 구워졌다! 구운 약초.")
+				else:
+					hud.add_log(item.get_display_name(true) + "을 화염초밭에 던졌다.")
+			map.Cell.HERB_ICE:
+				if item.item_type in [Item.Type.MATERIAL_RAW_MEAT, Item.Type.FOOD, Item.Type.COOKED_FOOD, Item.Type.BURNED_FOOD]:
+					new_item = Item.new()
+					new_item.item_type = Item.Type.FROZEN_FOOD
+					hud.add_log("얼음송이에 닿아 얼었다! 언 식량이 됐다.")
+				else:
+					hud.add_log(item.get_display_name(true) + "을 얼음송이밭에 던졌다.")
+			map.Cell.HERB_NIGHTSHADE:
+				if item.item_type in [Item.Type.MATERIAL_RAW_MEAT, Item.Type.FOOD, Item.Type.COOKED_FOOD]:
+					new_item = Item.new()
+					new_item.item_type = Item.Type.FOOD_ROTTEN
+					hud.add_log("나이트쉐이드 독이 스몄다. 상한 식량이 됐다.")
+				else:
+					hud.add_log(item.get_display_name(true) + "을 나이트쉐이드밭에 던졌다.")
+			_:
+				hud.add_log(item.get_display_name(true) + "을 약초밭에 던졌다.")
+		if new_item != null:
+			_drop_item(new_item, target_tile)
+			player.inventory.remove_at(_throw_item_idx)
+		elif item_burns or item.is_potion() or item.item_type == Item.Type.MATERIAL_BOTTLE:
+			player.inventory.remove_at(_throw_item_idx)
 		else:
-			map.set_cell(target_tile.x, target_tile.y, map.Cell.FLOOR)
-			hud.add_log("약초밭에 던졌습니다. 너무 멀어 효과가 없습니다.")
-		handled_tile = true
+			_drop_item(item, target_tile)
+			player.inventory.remove_at(_throw_item_idx)
+		_throw_item_idx = -1
+		_refresh_hud()
+		enemy_manager.do_turns(player.tile_pos)
+		return
 	elif target_cell == map.Cell.TRAP:
 		var trap_t: int = _trap_data.get(target_tile, 0)
 		if trap_t == 3:  # 스파이크: 해제 불가
@@ -1398,7 +1434,7 @@ func _execute_throw(target_tile: Vector2i) -> void:
 		Item.Type.POTION_HEAL:
 			hud.add_log(item.get_display_name(_identified[item.color_idx]) + "이 깨졌습니다.")
 		_:
-			if item.is_equipment() or item.is_material() or item.item_type == Item.Type.COOKED_FOOD:
+			if item.is_equipment() or item.is_material() or item.is_food():
 				_drop_item(item, target_tile)
 				hud.add_log(item.get_display_name(true) + "이 바닥에 떨어졌다.")
 			else:
@@ -1972,6 +2008,20 @@ func _trigger_altar(pos: Vector2i, cell: int) -> void:
 	_refresh_hud()
 
 # ── 약초밭 상호작용 ──────────────────────────────────────────────────────────
+
+func _herb_cell_drop_type(cell: int) -> int:
+	match cell:
+		map.Cell.HERB_ICE:        return Item.Type.MATERIAL_HERB_ICE
+		map.Cell.HERB_BLOOD_MOSS: return Item.Type.MATERIAL_HERB_BLOOD_MOSS
+		map.Cell.HERB_GINSENG:    return Item.Type.MATERIAL_HERB_GINSENG
+		map.Cell.HERB_NIGHTSHADE: return Item.Type.MATERIAL_HERB_NIGHTSHADE
+		map.Cell.HERB_AMBROSIA:   return Item.Type.MATERIAL_HERB_AMBROSIA
+		map.Cell.HERB_MUSHROOM:   return Item.Type.MATERIAL_HERB_MUSHROOM
+		map.Cell.HERB_MANDRAKE:   return Item.Type.MATERIAL_HERB_MANDRAKE
+		map.Cell.HERB_FIREWORT:   return Item.Type.MATERIAL_HERB_FIREWORT
+		map.Cell.HERB_DREAMGRASS: return Item.Type.MATERIAL_HERB_DREAMGRASS
+		map.Cell.HERB_GARLIC:     return Item.Type.MATERIAL_HERB_GARLIC
+	return -1
 
 func _trigger_herb(pos: Vector2i, cell: int) -> void:
 	map.set_cell(pos.x, pos.y, map.Cell.FLOOR)

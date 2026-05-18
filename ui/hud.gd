@@ -972,7 +972,7 @@ func _draw_bag_popup() -> void:
 		draw_rect(r, Color(0.4, 0.35, 0.2, 0.8) if has_item else Color(0.22, 0.22, 0.25, 0.5), false)
 		if has_item:
 			var item: Item = _inventory_items[i]
-			var identified: bool = item.item_type != Item.Type.FOOD \
+			var identified: bool = not item.is_food() \
 				and item.color_idx < _inventory_identified.size() \
 				and _inventory_identified[item.color_idx]
 			var atlas: Vector2i = item.get_atlas()
@@ -1245,7 +1245,7 @@ func _draw_action_popup() -> void:
 	if _action_item_idx >= 0 and _action_item_idx < _inventory_items.size():
 		var item: Item = _inventory_items[_action_item_idx]
 		var identified := false
-		if item.item_type != Item.Type.FOOD and item.color_idx < _inventory_identified.size():
+		if not item.is_food() and item.color_idx < _inventory_identified.size():
 			identified = _inventory_identified[item.color_idx]
 		item_name = item.get_display_name(identified)
 	draw_string(font, Vector2(px + 8, py + 20), item_name,
