@@ -103,6 +103,8 @@ func _init_run() -> void:
 		hud.wait_requested.connect(_on_wait_requested)
 	if not hud.home_requested.is_connected(_on_home_requested):
 		hud.home_requested.connect(_on_home_requested)
+	if not hud.quit_exploration_requested.is_connected(_trigger_game_over):
+		hud.quit_exploration_requested.connect(_trigger_game_over)
 	if not hud.item_action.is_connected(_on_item_action):
 		hud.item_action.connect(_on_item_action)
 	if not hud.throw_cancelled.is_connected(_on_throw_cancelled):
