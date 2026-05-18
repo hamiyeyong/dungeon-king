@@ -103,6 +103,8 @@ func _init_run() -> void:
 		hud.wait_requested.connect(_on_wait_requested)
 	if not hud.home_requested.is_connected(_on_home_requested):
 		hud.home_requested.connect(_on_home_requested)
+	if not hud.quit_exploration_requested.is_connected(_trigger_game_over):
+		hud.quit_exploration_requested.connect(_trigger_game_over)
 	if not hud.item_action.is_connected(_on_item_action):
 		hud.item_action.connect(_on_item_action)
 	if not hud.throw_cancelled.is_connected(_on_throw_cancelled):
@@ -2246,7 +2248,15 @@ func _on_bookshelf_approached(tile_pos: Vector2i) -> void:
 	else:
 		var cidx: int = unidentified[randi() % unidentified.size()]
 		_identified[cidx] = true
-		hud.add_log("책장에서 지식을 얻었다! 아이템 1종이 식별되었습니다.")
+		var learned_name: String
+		if cidx < 10:
+			var tmp := Item.new()
+			tmp.item_type = _potion_map[cidx]
+			tmp.color_idx = cidx
+			learned_name = "%s 물약 → %s" % [Item.COLORS[cidx], tmp.get_display_name(true)]
+		else:
+			learned_name = "낡은 주문서 → %s" % Item.get_type_name(Item.SCROLL_TYPES[cidx - 10])
+		hud.add_log("책장에서 지식을 얻었다! [%s] 식별되었습니다." % learned_name)
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
 

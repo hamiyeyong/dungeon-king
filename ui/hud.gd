@@ -27,6 +27,7 @@ const BAG_INV_SZ   := 50
 
 signal wait_requested
 signal home_requested
+signal quit_exploration_requested
 signal item_action(idx: int, action: String)
 signal unequip_requested(slot: String)
 signal throw_cancelled
@@ -297,6 +298,14 @@ func _input(event: InputEvent) -> void:
 	if _game_over_visible or _clear_visible:
 		if _overlay_btn_rect().has_point(p):
 			home_requested.emit()
+		get_viewport().set_input_as_handled()
+		return
+
+	if not is_any_popup_open() and _quit_btn_rect().has_point(p):
+		show_confirm("탐험을 중단하고 홈으로 돌아가시겠습니까?\n(획득 경험치는 유지됩니다)",
+			func():
+				quit_exploration_requested.emit(),
+			func(): pass)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -708,6 +717,7 @@ func _input(event: InputEvent) -> void:
 
 func _draw() -> void:
 	_draw_top_left()
+	_draw_quit_btn()
 	_draw_bottom_bar()
 	if _throw_mode:
 		_draw_throw_cancel()
@@ -737,6 +747,14 @@ func _draw() -> void:
 		_draw_game_over()
 	if _clear_visible:
 		_draw_game_clear()
+
+func _draw_quit_btn() -> void:
+	var font := ThemeDB.fallback_font
+	var r := _quit_btn_rect()
+	draw_rect(r, Color(0.18, 0.08, 0.08, 0.85))
+	draw_rect(r, Color(0.6, 0.25, 0.25, 0.8), false)
+	draw_string(font, Vector2(r.position.x, r.position.y + r.size.y * 0.5 + 4),
+		"중단", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 9, Color(0.9, 0.5, 0.5))
 
 func _draw_top_left() -> void:
 	var font := ThemeDB.fallback_font
@@ -1336,6 +1354,9 @@ func set_class_skill_info(label: String, cooldown: int, mp: int) -> void:
 	_class_skill_cooldown = cooldown
 	_class_skill_mp = mp
 	queue_redraw()
+
+func _quit_btn_rect() -> Rect2:
+	return Rect2(W - 46, 6, 40, 22)
 
 func _throw_cancel_rect() -> Rect2:
 	return Rect2(W - SLOT_SZ - 6, 6, SLOT_SZ, SLOT_SZ)
