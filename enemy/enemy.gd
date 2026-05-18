@@ -116,17 +116,34 @@ func ai_step(player_pos: Vector2i, occupied: Array) -> bool:
 	return false
 
 func _move_toward(target: Vector2i, occupied: Array) -> void:
-	var dx: int = sign(target.x - tile_pos.x)
-	var dy: int = sign(target.y - tile_pos.y)
-	var steps := []
-	if dx != 0:
-		steps.append(Vector2i(tile_pos.x + dx, tile_pos.y))
-	if dy != 0:
-		steps.append(Vector2i(tile_pos.x, tile_pos.y + dy))
-	for step in steps:
-		if map_ref.is_walkable(step.x, step.y) and not (step in occupied):
-			occupied.erase(tile_pos)
-			tile_pos = step
-			occupied.append(tile_pos)
-			position = map_ref.tile_to_world(tile_pos)
-			return
+	var next: Vector2i = _bfs_next_step(target, occupied)
+	if next == tile_pos:
+		return
+	occupied.erase(tile_pos)
+	tile_pos = next
+	occupied.append(tile_pos)
+	position = map_ref.tile_to_world(tile_pos)
+
+func _bfs_next_step(target: Vector2i, occupied: Array) -> Vector2i:
+	var queue: Array[Vector2i] = [tile_pos]
+	var came_from: Dictionary = {}
+	came_from[tile_pos] = tile_pos
+	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	while queue.size() > 0:
+		var cur: Vector2i = queue.pop_front()
+		if cur == target:
+			var step: Vector2i = cur
+			while came_from[step] != tile_pos:
+				step = came_from[step]
+			return step
+		for d: Vector2i in dirs:
+			var nb: Vector2i = cur + d
+			if nb in came_from:
+				continue
+			if not map_ref.is_walkable(nb.x, nb.y):
+				continue
+			if nb in occupied and nb != target:
+				continue
+			came_from[nb] = cur
+			queue.append(nb)
+	return tile_pos
