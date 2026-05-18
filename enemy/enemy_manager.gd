@@ -4,6 +4,7 @@ class_name EnemyManager
 signal player_attacked(atk_value: int, attacker_name: String)
 signal all_cleared(pos: Vector2)
 signal trap_triggered_by_enemy(tile_pos: Vector2i, enemy_node)
+signal herb_triggered_by_enemy(tile_pos: Vector2i, cell: int, enemy_node)
 
 var enemies: Array[Enemy] = []
 const ENEMY_SCENE = preload("res://enemy/enemy.tscn")
@@ -218,5 +219,12 @@ func do_turns(player_pos: Vector2i) -> void:
 		if attacked:
 			player_attacked.emit(e.atk, e.display_name)
 		elif is_instance_valid(e) and _map_ref:
-			if _map_ref.get_cell(e.tile_pos.x, e.tile_pos.y) == _map_ref.Cell.TRAP:
+			var ec: int = _map_ref.get_cell(e.tile_pos.x, e.tile_pos.y)
+			if ec == _map_ref.Cell.TRAP:
 				trap_triggered_by_enemy.emit(e.tile_pos, e)
+			elif ec in [_map_ref.Cell.HERB_ICE, _map_ref.Cell.HERB_BLOOD_MOSS,
+					_map_ref.Cell.HERB_GINSENG, _map_ref.Cell.HERB_NIGHTSHADE,
+					_map_ref.Cell.HERB_AMBROSIA, _map_ref.Cell.HERB_MUSHROOM,
+					_map_ref.Cell.HERB_MANDRAKE, _map_ref.Cell.HERB_FIREWORT,
+					_map_ref.Cell.HERB_DREAMGRASS, _map_ref.Cell.HERB_GARLIC]:
+				herb_triggered_by_enemy.emit(e.tile_pos, ec, e)

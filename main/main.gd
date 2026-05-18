@@ -95,6 +95,8 @@ func _init_run() -> void:
 		enemy_manager.boss_dropped_key.connect(_on_boss_dropped_key)
 	if not enemy_manager.trap_triggered_by_enemy.is_connected(_on_enemy_trap):
 		enemy_manager.trap_triggered_by_enemy.connect(_on_enemy_trap)
+	if not enemy_manager.herb_triggered_by_enemy.is_connected(_on_enemy_herb):
+		enemy_manager.herb_triggered_by_enemy.connect(_on_enemy_herb)
 	if not enemy_manager.enemy_dropped_gold.is_connected(_on_enemy_dropped_gold):
 		enemy_manager.enemy_dropped_gold.connect(_on_enemy_dropped_gold)
 	if not hud.wait_requested.is_connected(_on_wait_requested):
@@ -730,6 +732,68 @@ func _on_enemy_trap(tile_pos: Vector2i, enemy) -> void:
 		player.gain_exp(reward)
 		_hunter_arrow_drop(kill_tile)
 
+func _on_enemy_herb(tile_pos: Vector2i, cell: int, enemy) -> void:
+	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
+	if not is_instance_valid(enemy):
+		return
+	var drop_type: int = -1
+	match cell:
+		map.Cell.HERB_ICE:
+			enemy.apply_status("sleep", 2)
+			hud.add_log("얼음송이밭! %s 빙결 (2턴)." % enemy.display_name)
+			drop_type = Item.Type.MATERIAL_HERB_ICE
+		map.Cell.HERB_BLOOD_MOSS:
+			var dmg: int = enemy.take_damage(3)
+			enemy.apply_status("sleep", 3)
+			hud.add_log("피이끼밭! %s HP -%d, 마비 (3턴)." % [enemy.display_name, dmg])
+			drop_type = Item.Type.MATERIAL_HERB_BLOOD_MOSS
+		map.Cell.HERB_GINSENG:
+			enemy.hp = min(enemy.max_hp, enemy.hp + 10)
+			hud.add_log("산삼밭! %s HP +10 회복." % enemy.display_name)
+			drop_type = Item.Type.MATERIAL_HERB_GINSENG
+		map.Cell.HERB_NIGHTSHADE:
+			var dmg: int = enemy.take_damage(5)
+			enemy.apply_status("poison", Item.POISON_TURNS)
+			hud.add_log("나이트쉐이드밭! %s HP -%d, 독 (%d턴)." % [enemy.display_name, dmg, Item.POISON_TURNS])
+			drop_type = Item.Type.MATERIAL_HERB_NIGHTSHADE
+		map.Cell.HERB_AMBROSIA:
+			hud.add_log("암브로시아밭! %s가 밟고 지나쳤다." % enemy.display_name)
+			drop_type = Item.Type.MATERIAL_HERB_AMBROSIA
+		map.Cell.HERB_MUSHROOM:
+			enemy.hp = min(enemy.max_hp, enemy.hp + 5)
+			hud.add_log("영지버섯밭! %s HP +5 회복." % enemy.display_name)
+			drop_type = Item.Type.MATERIAL_HERB_MUSHROOM
+		map.Cell.HERB_MANDRAKE:
+			var dmg: int = enemy.take_damage(8)
+			hud.add_log("만드라고라밭! %s 비명에 HP -%d." % [enemy.display_name, dmg])
+			drop_type = Item.Type.MATERIAL_HERB_MANDRAKE
+		map.Cell.HERB_FIREWORT:
+			enemy.apply_status("fire", Item.FIRE_TURNS)
+			hud.add_log("화염초밭! %s 화염 (%d턴)." % [enemy.display_name, Item.FIRE_TURNS])
+			drop_type = Item.Type.MATERIAL_HERB_FIREWORT
+		map.Cell.HERB_DREAMGRASS:
+			var dmg: int = enemy.take_damage(2)
+			enemy.apply_status("sleep", Item.SLEEP_TURNS)
+			hud.add_log("꿈결초밭! %s HP -%d, 수면 (%d턴)." % [enemy.display_name, dmg, Item.SLEEP_TURNS])
+			drop_type = Item.Type.MATERIAL_HERB_DREAMGRASS
+		map.Cell.HERB_GARLIC:
+			enemy.poison_turns = 0
+			enemy.fire_turns = 0
+			enemy.sleep_turns = 0
+			hud.add_log("마늘밭! %s 상태이상 정화." % enemy.display_name)
+			drop_type = Item.Type.MATERIAL_HERB_GARLIC
+	if drop_type >= 0 and randi() % 2 == 0:
+		var herb_mat := Item.new()
+		herb_mat.item_type = drop_type
+		_pick_or_drop(herb_mat, tile_pos)
+	if is_instance_valid(enemy) and enemy.is_dead():
+		var kill_tile: Vector2i = enemy.tile_pos
+		var reward: int = 5 * player.floor_num
+		hud.add_log("%s 처치! EXP +%d" % [enemy.display_name, reward])
+		enemy_manager.remove_enemy(enemy)
+		player.gain_exp(reward)
+		_hunter_arrow_drop(kill_tile)
+
 func _trigger_trap(pos: Vector2i) -> void:
 	var trap_type: int = _trap_data.get(pos, randi() % 11)
 	# 스파이크 함정은 계속 활성
@@ -1158,10 +1222,10 @@ func _execute_throw(target_tile: Vector2i) -> void:
 		hud.add_log("던지기 취소")
 		return
 
+	var was_slot_throw := _throw_from_slot
 	_exit_throw_mode()
 
-	if _throw_from_slot:
-		_throw_from_slot = false
+	if was_slot_throw:
 		if player.equipped_throwable == null:
 			return
 		var t_item: Item = player.equipped_throwable
