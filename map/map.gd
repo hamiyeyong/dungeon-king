@@ -227,8 +227,9 @@ func _place_objects(floor_num: int = 1, is_boss_floor: bool = false) -> void:
 				else:
 					special_types.append(Cell.WIZARD_STATUE)
 	if randi() % 3 == 0: special_types.append(Cell.KNOWLEDGE_TABLET)
-	if randi() % 4 == 0: special_types.append(Cell.WARRIOR_STATUE)
-	if randi() % 5 == 0: special_types.append(Cell.WIZARD_STATUE)
+	if Cell.CHEST_HERO in special_types:
+		if randi() % 4 == 0: special_types.append(Cell.WARRIOR_STATUE)
+		if randi() % 5 == 0: special_types.append(Cell.WIZARD_STATUE)
 	if randi() % 6 == 0: special_types.append(Cell.ANGEL_STATUE)
 	if randi() % 3 == 0: special_types.append(Cell.BOOKSHELF)
 	for obj_type in special_types:
