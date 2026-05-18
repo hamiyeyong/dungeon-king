@@ -63,7 +63,7 @@ func _init_run() -> void:
 	_identified.assign([false, false, false, false, false, false, false, false, false, false])
 	floor_items.clear()
 
-	map.generate(player.floor_num)
+	map.generate(player.floor_num, enemy_manager.is_boss_floor(player.floor_num))
 	_assign_trap_types()
 	var start: Vector2i = map.get_start_pos()
 	player.init(start, map)
@@ -492,7 +492,7 @@ func _do_floor_transition(direction: int) -> void:
 	player.floor_num = new_floor
 	floor_items.clear()
 	_shop_items.clear()
-	map.generate(player.floor_num)
+	map.generate(player.floor_num, enemy_manager.is_boss_floor(player.floor_num))
 	if _is_merchant_floor(player.floor_num):
 		_generate_shop()
 	var start: Vector2i = map.get_start_pos()

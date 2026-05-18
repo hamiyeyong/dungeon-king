@@ -87,13 +87,27 @@ func spawn(rooms: Array[Rect2i], map: Node, floor_num: int) -> void:
 	tiles.shuffle()
 
 	if is_boss_floor(floor_num):
-		# 보스 1마리만 배치 (마지막 방 중앙)
-		if not tiles.is_empty():
+		# 보스: 마지막 방 내 FLOOR 타일에 확정 배치
+		var last_room: Rect2i = rooms.back()
+		var boss_candidates: Array[Vector2i] = []
+		for ry in range(last_room.position.y, last_room.end.y):
+			for rx in range(last_room.position.x, last_room.end.x):
+				if map.get_cell(rx, ry) == map.Cell.FLOOR:
+					boss_candidates.append(Vector2i(rx, ry))
+		if boss_candidates.is_empty():
+			for ry in range(last_room.position.y, last_room.end.y):
+				for rx in range(last_room.position.x, last_room.end.x):
+					if map.is_walkable(rx, ry):
+						boss_candidates.append(Vector2i(rx, ry))
+		if boss_candidates.is_empty():
+			boss_candidates = tiles
+		if not boss_candidates.is_empty():
+			boss_candidates.shuffle()
 			var e: Enemy = ENEMY_SCENE.instantiate() as Enemy
 			add_child(e)
 			_setup_enemy(e, BOSS_BY_FLOOR[floor_num], floor_num)
 			e.is_boss = true
-			e.init(tiles[0], map)
+			e.init(boss_candidates[0], map)
 			enemies.append(e)
 		return
 

@@ -92,11 +92,11 @@ var _fov_player_pos: Vector2i = Vector2i.ZERO
 var _fov_radius: int = 0
 var _fov_light_sources: Array[Vector2i] = []
 
-func generate(floor_num: int = 1) -> void:
+func generate(floor_num: int = 1, is_boss_floor: bool = false) -> void:
 	_init_grid()
 	_place_rooms()
 	_connect_rooms()
-	_place_objects(floor_num)
+	_place_objects(floor_num, is_boss_floor)
 	queue_redraw()
 
 func update_floor_items(visuals: Array[Dictionary]) -> void:
@@ -163,7 +163,7 @@ func _connect_rooms() -> void:
 func _is_merchant_floor(floor_num: int) -> bool:
 	return floor_num % 5 == 3  # 3, 8, 13, 18, 23층
 
-func _place_objects(floor_num: int = 1) -> void:
+func _place_objects(floor_num: int = 1, is_boss_floor: bool = false) -> void:
 	if rooms.size() < 2:
 		return
 	var last: Vector2i = rooms.back().get_center()
@@ -211,13 +211,21 @@ func _place_objects(floor_num: int = 1) -> void:
 	if randi() % 2 == 0: special_types.append(Cell.TAINTED_SPRING)
 	if randi() % 4 == 0: special_types.append(Cell.CLEAR_SPRING)
 	if randi() % 2 == 0: special_types.append(Cell.SKULL_PILE)
-	if randi() % 3 == 0:
-		special_types.append(Cell.ALTAR)
-		special_types.append(Cell.CHEST_HERO)
-	if randi() % 5 == 0:
-		special_types.append(Cell.ALTAR_BIG)
-		if Cell.CHEST_HERO not in special_types:
+	if not is_boss_floor:
+		if randi() % 3 == 0:
+			special_types.append(Cell.ALTAR)
 			special_types.append(Cell.CHEST_HERO)
+		if randi() % 5 == 0:
+			special_types.append(Cell.ALTAR_BIG)
+			if Cell.CHEST_HERO not in special_types:
+				special_types.append(Cell.CHEST_HERO)
+		# 영웅의 돌 소모처 보장: CHEST_HERO가 있으면 석상 최소 1개 배치
+		if Cell.CHEST_HERO in special_types:
+			if Cell.WARRIOR_STATUE not in special_types and Cell.WIZARD_STATUE not in special_types:
+				if randi() % 2 == 0:
+					special_types.append(Cell.WARRIOR_STATUE)
+				else:
+					special_types.append(Cell.WIZARD_STATUE)
 	if randi() % 3 == 0: special_types.append(Cell.KNOWLEDGE_TABLET)
 	if randi() % 4 == 0: special_types.append(Cell.WARRIOR_STATUE)
 	if randi() % 5 == 0: special_types.append(Cell.WIZARD_STATUE)
