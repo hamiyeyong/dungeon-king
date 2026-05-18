@@ -53,14 +53,19 @@ func _ready() -> void:
 func _init_run() -> void:
 	_potion_map.assign([
 		Item.Type.POTION_HEAL,
-		Item.Type.POTION_HUNGER,
+		Item.Type.POTION_REGEN,
+		Item.Type.POTION_MANA,
 		Item.Type.POTION_POISON,
 		Item.Type.POTION_FIRE,
 		Item.Type.POTION_CLEANSE,
 		Item.Type.POTION_SLEEP,
+		Item.Type.POTION_PARALYZE,
+		Item.Type.POTION_ICE,
+		Item.Type.POTION_EXP,
 	])
 	_potion_map.shuffle()
-	_identified.assign([false, false, false, false, false, false, false, false, false, false])
+	# indices 0-9: 포션 10종, indices 10-13: 주문서 4종
+	_identified.assign([false, false, false, false, false, false, false, false, false, false, false, false, false, false])
 	floor_items.clear()
 
 	map.generate(player.floor_num, enemy_manager.is_boss_floor(player.floor_num))
@@ -158,7 +163,7 @@ func _init_run() -> void:
 	player._save_atk_bonus = SaveData.get_bonus_atk()
 
 	if SaveData.has_identify_potion():
-		var rand_idx: int = randi() % 6
+		var rand_idx: int = randi() % 10
 		_identified[rand_idx] = true
 
 	if SaveData.has_start_potion_heal():
@@ -326,7 +331,7 @@ func _pick_bush_drop() -> Item:
 	elif roll < 90:
 		mat.item_type = Item.Type.MATERIAL_BOTTLE
 	elif roll < 97:
-		var cidx: int = randi() % 6
+		var cidx: int = randi() % 10
 		mat.item_type = _potion_map[cidx]
 		mat.color_idx = cidx
 	else:
@@ -336,7 +341,7 @@ func _pick_bush_drop() -> Item:
 		else:
 			var sidx: int = sroll - 1
 			mat.item_type = Item.SCROLL_TYPES[sidx]
-			mat.color_idx = 6 + sidx
+			mat.color_idx = 10 + sidx
 	return mat
 
 func _resolve_jar(tile_pos: Vector2i) -> void:
@@ -400,6 +405,57 @@ func _spawn_fire(world_pos: Vector2) -> void:
 	var fx = STATUS_EFFECT_SCENE.instantiate()
 	add_child(fx)
 	fx.spawn_fire(world_pos)
+
+# 약초 직접 섭취 (포션 효과의 약 30%)
+func _consume_herb_direct(herb: Item) -> String:
+	match herb.item_type:
+		Item.Type.MATERIAL_HERB_GINSENG:
+			var heal: int = int(player.max_hp * 0.25)
+			player.hp = min(player.max_hp, player.hp + heal) as int
+			return "산삼 뿌리를 씹었다. HP +%d" % heal
+		Item.Type.MATERIAL_HERB_MUSHROOM:
+			player.herb_regen_turns = max(player.herb_regen_turns, 2) as int
+			return "말린 영지버섯을 씹었다. 2턴간 HP가 서서히 회복됩니다."
+		Item.Type.MATERIAL_HERB_MANDRAKE:
+			var gain: int = int(player.max_mp * 0.25)
+			player.mp = min(player.max_mp, player.mp + gain) as int
+			return "만드라고라 뿌리를 씹었다. MP +%d" % gain
+		Item.Type.MATERIAL_HERB_GARLIC:
+			if player.poison_turns > 0:
+				player.poison_turns = 0
+				return "생마늘을 씹었다. 독 상태이상 해제!"
+			elif player.fire_turns > 0:
+				player.fire_turns = 0
+				return "생마늘을 씹었다. 화염 상태이상 해제!"
+			elif player.paralyze_turns > 0:
+				player.paralyze_turns = 0
+				return "생마늘을 씹었다. 마비 상태이상 해제!"
+			elif player.slow_turns > 0:
+				player.slow_turns = 0
+				return "생마늘을 씹었다. 느려짐 상태이상 해제!"
+			return "생마늘을 씹었다. 특별한 효과가 없었다."
+		Item.Type.MATERIAL_HERB_BLOOD_MOSS:
+			player.apply_status("paralyze", 1)
+			return "말린 피이끼를 씹었다. 마비 상태이상! (1턴)"
+		Item.Type.MATERIAL_HERB_ICE:
+			player.apply_status("slow", 1)
+			return "식은 얼음송이를 씹었다. 느려짐 상태이상! (1턴)"
+		Item.Type.MATERIAL_HERB_NIGHTSHADE:
+			player.apply_status("poison", Item.POISON_TURNS)
+			_spawn_poison(player.position)
+			return "나이트쉐이드 잎을 씹었다. 독 상태이상!"
+		Item.Type.MATERIAL_HERB_FIREWORT:
+			player.apply_status("fire", Item.FIRE_TURNS)
+			_spawn_fire(player.position)
+			return "화염초 꽃잎을 씹었다. 화염 상태이상!"
+		Item.Type.MATERIAL_HERB_DREAMGRASS:
+			player.apply_status("sleep", 1)
+			player.fatigue = max(0, player.fatigue - 30) as int
+			return "꿈결초 꽃잎을 씹었다. 수면 상태이상 (1턴) + 피로도 -30"
+		Item.Type.MATERIAL_HERB_AMBROSIA:
+			player.gain_exp(50)
+			return "암브로시아 꽃을 씹었다. 경험치 +50!"
+	return "약초를 씹었다."
 
 # ── Stats & HUD ────────────────────────────────────────────────────────────
 
@@ -560,7 +616,7 @@ func _chest_give_slot_a() -> void:
 	if randi() % 2 == 0:
 		item.item_type = Item.Type.FOOD
 	else:
-		var cidx: int = randi() % 6
+		var cidx: int = randi() % 10
 		item.item_type = _potion_map[cidx]
 		item.color_idx = cidx
 	if randi() % 10 == 0:
@@ -594,7 +650,7 @@ func _chest_give_slot_b() -> void:
 		else:
 			var sidx: int = randi() % 4
 			item.item_type = Item.SCROLL_TYPES[sidx]
-			item.color_idx = 6 + sidx
+			item.color_idx = 10 + sidx
 	elif roll < 11:
 		# 재료
 		var mat_types: Array = [
@@ -827,7 +883,7 @@ func _create_random_item() -> Item:
 	elif roll == 3:
 		item.item_type = Item.Type.MATERIAL_CLOTH
 	else:
-		item.color_idx = randi() % 6
+		item.color_idx = randi() % 10
 		item.item_type = _potion_map[item.color_idx]
 	if randi() % 10 == 0:
 		item.is_blessed = true
@@ -903,6 +959,15 @@ func _on_item_action(idx: int, action: String) -> void:
 				_refresh_hud()
 				enemy_manager.do_turns(player.tile_pos)
 				return
+			if Item.HERB_POTION_MAP.has(item.item_type):
+				var msg := _consume_herb_direct(item)
+				hud.add_log(msg)
+				player.stats_changed.emit()
+				player.inventory.remove_at(idx)
+				hud.close_inventory()
+				_refresh_hud()
+				enemy_manager.do_turns(player.tile_pos)
+				return
 			if item.item_type == Item.Type.TOOL_REPAIR:
 				var msg := item.apply(player)
 				hud.add_log(msg)
@@ -951,7 +1016,7 @@ func _on_item_action(idx: int, action: String) -> void:
 				_refresh_hud()
 				return
 			if item.is_scroll():
-				var sidx: int = item.color_idx - 6
+				var sidx: int = item.color_idx - 10
 				if sidx < 0 or sidx > 3:
 					hud.add_log("알 수 없는 주문서입니다.")
 					hud.close_inventory()
@@ -997,7 +1062,7 @@ func _on_item_action(idx: int, action: String) -> void:
 					Item.Type.POTION_POISON: _spawn_poison(player.position)
 					Item.Type.POTION_FIRE:   _spawn_fire(player.position)
 				# 저주 물약: 기존 효과 + 저주 상태이상 (랜덤 스탯 1 감소)
-				if item.is_cursed and item.item_type in [Item.Type.POTION_HEAL, Item.Type.POTION_HUNGER, Item.Type.POTION_POISON, Item.Type.POTION_FIRE, Item.Type.POTION_CLEANSE, Item.Type.POTION_SLEEP]:
+				if item.is_cursed and item.item_type in [Item.Type.POTION_HEAL, Item.Type.POTION_REGEN, Item.Type.POTION_MANA, Item.Type.POTION_POISON, Item.Type.POTION_FIRE, Item.Type.POTION_CLEANSE, Item.Type.POTION_SLEEP, Item.Type.POTION_PARALYZE, Item.Type.POTION_ICE, Item.Type.POTION_EXP]:
 					if randi() % 2 == 0:
 						player.curse_atk += 1
 						hud.add_log("저주 물약! ATK -1")
@@ -1272,8 +1337,6 @@ func _execute_throw(target_tile: Vector2i) -> void:
 				hud.add_log("생고기가 바닥에 떨어졌다.")
 		Item.Type.POTION_HEAL:
 			hud.add_log(item.get_display_name(_identified[item.color_idx]) + "이 깨졌습니다.")
-		Item.Type.POTION_HUNGER:
-			hud.add_log(item.get_display_name(_identified[item.color_idx]) + "이 깨졌습니다.")
 		_:
 			if item.is_equipment() or item.is_material() or item.item_type == Item.Type.COOKED_FOOD:
 				_drop_item(item, target_tile)
@@ -1389,12 +1452,16 @@ func _item_buy_price(item: Item) -> int:
 	if item.is_scroll():
 		return 120 if identified else 50
 	match item.item_type:
-		Item.Type.POTION_HEAL:    return 80 if identified else 30
-		Item.Type.POTION_HUNGER:  return 60 if identified else 30
-		Item.Type.POTION_POISON:  return 50 if identified else 30
-		Item.Type.POTION_FIRE:    return 50 if identified else 30
-		Item.Type.POTION_CLEANSE: return 50 if identified else 30
-		Item.Type.POTION_SLEEP:   return 50 if identified else 30
+		Item.Type.POTION_HEAL:     return 80 if identified else 30
+		Item.Type.POTION_REGEN:    return 100 if identified else 30
+		Item.Type.POTION_MANA:     return 90 if identified else 30
+		Item.Type.POTION_POISON:   return 50 if identified else 30
+		Item.Type.POTION_FIRE:     return 50 if identified else 30
+		Item.Type.POTION_CLEANSE:  return 60 if identified else 30
+		Item.Type.POTION_SLEEP:    return 50 if identified else 30
+		Item.Type.POTION_PARALYZE: return 60 if identified else 30
+		Item.Type.POTION_ICE:      return 60 if identified else 30
+		Item.Type.POTION_EXP:      return 120 if identified else 30
 		Item.Type.FOOD, Item.Type.COOKED_FOOD: return 40
 		Item.Type.MATERIAL_BRANCH, Item.Type.MATERIAL_STONE, Item.Type.MATERIAL_CLOTH: return 15
 		Item.Type.MATERIAL_HERB:  return 20
@@ -1415,7 +1482,7 @@ func _create_shop_item() -> Item:
 	var item := Item.new()
 	var roll: int = randi() % 10
 	if roll < 3:
-		var cidx: int = randi() % 6
+		var cidx: int = randi() % 10
 		item.item_type = _potion_map[cidx]
 		item.color_idx = cidx
 	elif roll < 5:
@@ -1432,7 +1499,7 @@ func _create_shop_item() -> Item:
 	elif roll < 7:
 		var sidx: int = randi() % 4
 		item.item_type = Item.SCROLL_TYPES[sidx]
-		item.color_idx = 6 + sidx
+		item.color_idx = 10 + sidx
 	elif roll < 9:
 		item.item_type = Item.Type.FOOD
 	else:
@@ -1670,16 +1737,20 @@ func _on_cauldron_material_chosen(inv_idx: int) -> void:
 		var cidx: int
 		if _cauldron_is_white:
 			var good: Array = [_potion_map.find(Item.Type.POTION_HEAL),
-				_potion_map.find(Item.Type.POTION_HUNGER),
-				_potion_map.find(Item.Type.POTION_CLEANSE)]
+				_potion_map.find(Item.Type.POTION_REGEN),
+				_potion_map.find(Item.Type.POTION_MANA),
+				_potion_map.find(Item.Type.POTION_CLEANSE),
+				_potion_map.find(Item.Type.POTION_EXP)]
 			good = good.filter(func(x): return x >= 0)
-			cidx = good[randi() % good.size()] if not good.is_empty() else randi() % 6
+			cidx = good[randi() % good.size()] if not good.is_empty() else randi() % 10
 		else:
 			var bad: Array = [_potion_map.find(Item.Type.POTION_POISON),
 				_potion_map.find(Item.Type.POTION_FIRE),
-				_potion_map.find(Item.Type.POTION_SLEEP)]
+				_potion_map.find(Item.Type.POTION_SLEEP),
+				_potion_map.find(Item.Type.POTION_PARALYZE),
+				_potion_map.find(Item.Type.POTION_ICE)]
 			bad = bad.filter(func(x): return x >= 0)
-			cidx = bad[randi() % bad.size()] if not bad.is_empty() else randi() % 6
+			cidx = bad[randi() % bad.size()] if not bad.is_empty() else randi() % 10
 		result.item_type = _potion_map[cidx]
 		result.color_idx = cidx
 		identified = _identified[cidx]
@@ -1764,12 +1835,12 @@ func _create_well_transform(original: Item) -> Item:
 	elif original.is_scroll():
 		var sidx: int = randi() % 4
 		result.item_type = Item.SCROLL_TYPES[sidx]
-		result.color_idx = 6 + sidx
+		result.color_idx = 10 + sidx
 	elif original.is_food():
 		result.item_type = [Item.Type.FOOD, Item.Type.COOKED_FOOD][randi() % 2]
 	else:
 		# 물약
-		var cidx: int = randi() % 6
+		var cidx: int = randi() % 10
 		result.item_type = _potion_map[cidx]
 		result.color_idx = cidx
 	return result
@@ -1837,7 +1908,7 @@ func _trigger_altar(pos: Vector2i, cell: int) -> void:
 		else:
 			var sidx: int = randi() % 4
 			item.item_type = Item.SCROLL_TYPES[sidx]
-			item.color_idx = 6 + sidx
+			item.color_idx = 10 + sidx
 	var label := "대제단" if cell == map.Cell.ALTAR_BIG else "제단"
 	if player.inventory.size() >= player.MAX_INVENTORY:
 		_drop_item(item, pos)
@@ -1954,7 +2025,7 @@ func _on_skull_approached(tile_pos: Vector2i) -> void:
 				var mats: Array = [Item.Type.MATERIAL_BRANCH, Item.Type.MATERIAL_STONE, Item.Type.MATERIAL_CLOTH, Item.Type.MATERIAL_ORE]
 				item.item_type = mats[randi() % mats.size()]
 			2:  # 물약
-				var cidx: int = randi() % 6
+				var cidx: int = randi() % 10
 				item.item_type = _potion_map[cidx]
 				item.color_idx = cidx
 		player.inventory.append(item)

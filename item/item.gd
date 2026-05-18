@@ -2,7 +2,7 @@ class_name Item
 extends RefCounted
 
 enum Type {
-	POTION_HEAL, POTION_HUNGER, POTION_POISON, POTION_FIRE, POTION_CLEANSE, POTION_SLEEP,
+	POTION_HEAL, POTION_REGEN, POTION_MANA, POTION_POISON, POTION_FIRE, POTION_CLEANSE, POTION_SLEEP, POTION_PARALYZE, POTION_ICE, POTION_EXP,
 	FOOD, COOKED_FOOD, FOOD_ROTTEN,
 	SCROLL_ENHANCE, SCROLL_BASH, SCROLL_TELEPORT, SCROLL_IDENTIFY, SCROLL_REMOVE_CURSE,
 	WEAPON_WOOD, WEAPON_STONE, WEAPON_IRON,
@@ -34,6 +34,10 @@ const COLOR_ATLAS: Array = [
 	Vector2i(3, 9),  # 노랑
 	Vector2i(4, 8),  # 보라 (파랑 베이스 + modulate)
 	Vector2i(3, 8),  # 흰색 (빨강 베이스 + modulate)
+	Vector2i(3, 8),  # 주황 (빨강 베이스 + modulate)
+	Vector2i(3, 8),  # 분홍 (빨강 베이스 + modulate)
+	Vector2i(4, 8),  # 하늘 (파랑 베이스 + modulate)
+	Vector2i(4, 9),  # 갈색 (초록 베이스 + modulate)
 ]
 const POTION_MODULATE: Array = [
 	Color(1.0, 1.0, 1.0),        # 빨강
@@ -42,6 +46,10 @@ const POTION_MODULATE: Array = [
 	Color(1.0, 1.0, 1.0),        # 노랑
 	Color(0.65, 0.2, 0.9),       # 보라
 	Color(0.95, 0.95, 0.98),     # 흰색
+	Color(1.0, 0.55, 0.1),       # 주황
+	Color(1.0, 0.55, 0.75),      # 분홍
+	Color(0.35, 0.75, 1.0),      # 하늘
+	Color(0.55, 0.35, 0.15),     # 갈색
 ]
 const FOOD_ATLAS        := Vector2i(6, 9)
 const COOKED_FOOD_ATLAS := Vector2i(7, 8)
@@ -56,7 +64,8 @@ const ANCIENT_SCROLL_TYPES: Array = [
 	Type.ANCIENT_SCROLL_DISPEL,
 ]
 const RAW_MEAT_ATLAS    := Vector2i(7, 9)
-const COLORS := ["빨간색", "파란색", "초록색", "노란색", "보라색", "흰색"]
+const COLORS := ["빨간색", "파란색", "초록색", "노란색", "보라색", "흰색", "주황색", "분홍색", "하늘색", "갈색"]
+const NUM_POTIONS := 10
 const SCROLL_NAMES := ["강타 주문서", "순간이동 주문서", "식별 주문서", "저주 해제 주문서"]
 # 주문서 타입 → 식별 인덱스 (potions 6개 다음 4개)
 const SCROLL_TYPES: Array = [Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY, Type.SCROLL_REMOVE_CURSE]
@@ -89,18 +98,18 @@ const RECIPES: Array = [
 	[Type.TOOL_REPAIR,     0, [[Type.MATERIAL_ORE, 1]]],
 ]
 
-# 약초 재료 → 물약 타입 (솥에서 재료 선택 시 사용)
+# 약초 재료 → 물약 타입 (솥에서 재료 선택 시 사용) — 1:1 매핑
 const HERB_POTION_MAP: Dictionary = {
-	Type.MATERIAL_HERB_BLOOD_MOSS:  Type.POTION_HEAL,
-	Type.MATERIAL_HERB_GINSENG:     Type.POTION_HUNGER,
-	Type.MATERIAL_HERB_AMBROSIA:    Type.POTION_HEAL,
-	Type.MATERIAL_HERB_MUSHROOM:    Type.POTION_HUNGER,
+	Type.MATERIAL_HERB_GINSENG:     Type.POTION_HEAL,
+	Type.MATERIAL_HERB_MUSHROOM:    Type.POTION_REGEN,
+	Type.MATERIAL_HERB_MANDRAKE:    Type.POTION_MANA,
 	Type.MATERIAL_HERB_NIGHTSHADE:  Type.POTION_POISON,
 	Type.MATERIAL_HERB_FIREWORT:    Type.POTION_FIRE,
-	Type.MATERIAL_HERB_MANDRAKE:    Type.POTION_SLEEP,
-	Type.MATERIAL_HERB_DREAMGRASS:  Type.POTION_SLEEP,
-	Type.MATERIAL_HERB_ICE:         Type.POTION_SLEEP,
 	Type.MATERIAL_HERB_GARLIC:      Type.POTION_CLEANSE,
+	Type.MATERIAL_HERB_DREAMGRASS:  Type.POTION_SLEEP,
+	Type.MATERIAL_HERB_BLOOD_MOSS:  Type.POTION_PARALYZE,
+	Type.MATERIAL_HERB_ICE:         Type.POTION_ICE,
+	Type.MATERIAL_HERB_AMBROSIA:    Type.POTION_EXP,
 }
 
 static func get_type_name(t: int) -> String:
@@ -275,12 +284,16 @@ func _scroll_display_name(identified: bool) -> String:
 
 func _true_name() -> String:
 	match item_type:
-		Type.POTION_HEAL:   return "회복 물약"
-		Type.POTION_HUNGER: return "포만 물약"
-		Type.POTION_POISON: return "독 물약"
-		Type.POTION_FIRE:   return "화염 물약"
-		Type.POTION_CLEANSE: return "정화 물약"
-		Type.POTION_SLEEP:   return "수면 물약"
+		Type.POTION_HEAL:     return "회복 물약"
+		Type.POTION_REGEN:    return "재생 물약"
+		Type.POTION_MANA:     return "정신력 물약"
+		Type.POTION_POISON:   return "독 물약"
+		Type.POTION_FIRE:     return "화염 물약"
+		Type.POTION_CLEANSE:  return "정화 물약"
+		Type.POTION_SLEEP:    return "수면 물약"
+		Type.POTION_PARALYZE: return "마비 물약"
+		Type.POTION_ICE:      return "얼음 물약"
+		Type.POTION_EXP:      return "경험치 물약"
 	return "식량"
 
 func get_reveal_text() -> String:
@@ -288,9 +301,9 @@ func get_reveal_text() -> String:
 		return "낡은 주문서의 정체가 밝혀졌다! → %s" % get_display_name(true)
 	return "%s 물약은 %s이었다!" % [COLORS[color_idx], _true_name()]
 
-# 독/불/수면은 던질 때 즉시 공개, 주문서(강화 제외)도 던질 때 공개
+# 해로운 포션(독/불/수면/마비/얼음)은 던질 때 즉시 공개, 주문서(강화 제외)도 던질 때 공개
 func reveals_on_throw() -> bool:
-	return item_type in [Type.POTION_POISON, Type.POTION_FIRE, Type.POTION_SLEEP] \
+	return item_type in [Type.POTION_POISON, Type.POTION_FIRE, Type.POTION_SLEEP, Type.POTION_PARALYZE, Type.POTION_ICE] \
 		or item_type in [Type.SCROLL_BASH, Type.SCROLL_TELEPORT, Type.SCROLL_IDENTIFY, Type.SCROLL_REMOVE_CURSE]
 
 func get_stat_label() -> String:
@@ -352,17 +365,22 @@ func get_atlas() -> Vector2i:
 func apply(player) -> String:
 	match item_type:
 		Type.POTION_HEAL:
-			var heal: int = 15 if is_blessed else 10
+			var heal: int = int(player.max_hp * (0.9 if is_blessed else 0.8))
 			player.hp = min(player.max_hp, player.hp + heal) as int
 			if is_blessed:
 				player.regen_turns = max(player.regen_turns, 5)
 			player.stats_changed.emit()
-			return "HP +%d 회복%s" % [heal, " + 재생 [축복]" if is_blessed else ""]
-		Type.POTION_HUNGER:
-			var reduce: int = 80 if is_blessed else 50
-			player.hunger = max(0, player.hunger - reduce) as int
+			return "회복 물약! HP +%d%s" % [heal, " + 재생 [축복]" if is_blessed else ""]
+		Type.POTION_REGEN:
+			var turns: int = 10 if is_blessed else 5
+			player.regen_turns = max(player.regen_turns, turns) as int
 			player.stats_changed.emit()
-			return "배고픔 -%d%s" % [reduce, " [축복]" if is_blessed else ""]
+			return "재생 물약! %d턴간 HP 재생%s" % [turns, " [축복]" if is_blessed else ""]
+		Type.POTION_MANA:
+			var gain: int = player.max_mp - player.mp if is_blessed else int(player.max_mp * 0.8)
+			player.mp = min(player.max_mp, player.mp + gain) as int
+			player.stats_changed.emit()
+			return "정신력 물약! MP +%d%s" % [gain, " [축복]" if is_blessed else ""]
 		Type.POTION_POISON:
 			if is_blessed:
 				var heal: int = 10
@@ -406,6 +424,28 @@ func apply(player) -> String:
 			player.fatigue = max(0, player.fatigue - 100) as int
 			player.stats_changed.emit()
 			return "수면 상태이상! (%d턴) 피로도 -100" % SLEEP_TURNS
+		Type.POTION_PARALYZE:
+			if is_blessed:
+				var heal: int = int(player.max_hp * 0.15)
+				player.hp = min(player.max_hp, player.hp + heal) as int
+				player.stats_changed.emit()
+				return "축복 마비 물약! 마비 대신 HP +%d [축복]" % heal
+			player.apply_status("paralyze", 3)
+			player.stats_changed.emit()
+			return "마비 물약! 마비 상태이상 (3턴)"
+		Type.POTION_ICE:
+			if is_blessed:
+				var heal: int = int(player.max_hp * 0.1)
+				player.hp = min(player.max_hp, player.hp + heal) as int
+				player.stats_changed.emit()
+				return "축복 얼음 물약! 빙결 대신 HP +%d [축복]" % heal
+			player.apply_status("slow", 3)
+			player.stats_changed.emit()
+			return "얼음 물약! 느려짐 상태이상 (3턴)"
+		Type.POTION_EXP:
+			var xp: int = 250 if is_blessed else 150
+			player.gain_exp(xp)
+			return "경험치 물약! 경험치 +%d%s" % [xp, " [축복]" if is_blessed else ""]
 		Type.FOOD:
 			var reduce: int = 45 if is_blessed else 30
 			player.hunger = max(0, player.hunger - reduce) as int
