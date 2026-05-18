@@ -9,7 +9,7 @@ extends Node2D
 
 const MAX_FLOOR := 25
 const THROW_RANGE := 5
-const MAX_ENHANCE := 5
+const MAX_ENHANCE := 10
 const HIT_EFFECT_SCENE := preload("res://fx/hit_effect.tscn")
 const STATUS_EFFECT_SCENE := preload("res://fx/status_effect.tscn")
 
@@ -632,16 +632,12 @@ func _chest_give_slot_b() -> void:
 	var item := Item.new()
 	var roll: int = randi() % 12
 	if roll < 4:
-		# 장비
-		var equip_types: Array = [
-			Item.Type.WEAPON_WOOD, Item.Type.WEAPON_STONE, Item.Type.WEAPON_IRON,
-			Item.Type.SHIELD_WOOD, Item.Type.SHIELD_IRON,
-			Item.Type.ARMOR_CLOTH, Item.Type.ARMOR_LEATHER,
-		]
-		var etype: int = equip_types[randi() % equip_types.size()]
+		# 장비 — 층수에 맞는 티어 드롭
+		var want_weapon: bool = randi() % 2 == 0
+		var etype: int = Item.get_equip_type_for_floor(player.floor_num, want_weapon)
 		item.item_type = etype
 		if Item.EQUIPMENT_DATA.has(etype):
-			item.durability = Item.EQUIPMENT_DATA[etype][3]
+			item.durability = Item.EQUIPMENT_DATA[etype][4]
 			item.max_durability = item.durability
 	elif roll < 6:
 		# 주문서 (일반 or 고대)
@@ -865,7 +861,7 @@ func _try_enhance(bonus: int = 1) -> String:
 	if target.enhance_level >= MAX_ENHANCE:
 		return ""
 	target.enhance_level = min(MAX_ENHANCE, target.enhance_level + bonus)
-	var original_max: int = Item.EQUIPMENT_DATA[target.item_type][3]
+	var original_max: int = Item.EQUIPMENT_DATA[target.item_type][4]
 	target.max_durability = original_max
 	target.durability = original_max
 	player._recalc_equip_stats()
@@ -1148,7 +1144,7 @@ func _on_throwable_slot_tapped() -> void:
 	if player.equipped_throwable == null:
 		return
 	if player.equipped_throwable.item_type == Item.Type.MATERIAL_ARROW_WOOD:
-		if player.equipped_weapon == null or player.equipped_weapon.item_type != Item.Type.WEAPON_BOW:
+		if player.equipped_weapon == null or not player.equipped_weapon.is_bow():
 			hud.add_log("활을 장착해야 화살을 쏠 수 있습니다.")
 			return
 	_throw_from_slot = true
@@ -1441,14 +1437,14 @@ func _is_merchant_floor(n: int) -> bool:
 func _item_buy_price(item: Item) -> int:
 	var identified: bool = item.color_idx < _identified.size() and _identified[item.color_idx]
 	if item.is_equipment():
-		match item.item_type:
-			Item.Type.WEAPON_IRON:    return 250
-			Item.Type.WEAPON_STONE:   return 120
-			Item.Type.WEAPON_WOOD:    return 60
-			Item.Type.SHIELD_WOOD:    return 80
-			Item.Type.SHIELD_IRON:    return 200
-			Item.Type.ARMOR_CLOTH:    return 80
-			Item.Type.ARMOR_LEATHER:  return 180
+		# 티어 기반 가격: 기본가 × 티어^1.5 (무기), 티어 × 50 (방어구)
+		var tier: int = 1
+		if item.is_weapon():
+			tier = item.get_weapon_tier()
+			return int(50 * pow(tier, 1.5))
+		# 방어구/방패는 DEF 값 기준
+		var def_val: int = Item.EQUIPMENT_DATA[item.item_type][3]
+		return def_val * 20
 	if item.is_scroll():
 		return 120 if identified else 50
 	match item.item_type:
@@ -1486,15 +1482,11 @@ func _create_shop_item() -> Item:
 		item.item_type = _potion_map[cidx]
 		item.color_idx = cidx
 	elif roll < 5:
-		var equip_types: Array = [
-			Item.Type.WEAPON_WOOD, Item.Type.WEAPON_STONE, Item.Type.WEAPON_IRON,
-			Item.Type.SHIELD_WOOD, Item.Type.SHIELD_IRON,
-			Item.Type.ARMOR_CLOTH, Item.Type.ARMOR_LEATHER,
-		]
-		var etype: int = equip_types[randi() % equip_types.size()]
+		var want_weapon: bool = randi() % 2 == 0
+		var etype: int = Item.get_equip_type_for_floor(player.floor_num, want_weapon)
 		item.item_type = etype
 		if Item.EQUIPMENT_DATA.has(etype):
-			item.durability = Item.EQUIPMENT_DATA[etype][3]
+			item.durability = Item.EQUIPMENT_DATA[etype][4]
 			item.max_durability = item.durability
 	elif roll < 7:
 		var sidx: int = randi() % 4
@@ -1825,12 +1817,11 @@ func _on_well_item_selected(inv_idx: int) -> void:
 func _create_well_transform(original: Item) -> Item:
 	var result := Item.new()
 	if original.is_equipment():
-		var types: Array = [Item.Type.WEAPON_WOOD, Item.Type.WEAPON_STONE, Item.Type.WEAPON_IRON,
-			Item.Type.SHIELD_WOOD, Item.Type.SHIELD_IRON, Item.Type.ARMOR_CLOTH, Item.Type.ARMOR_LEATHER]
-		var etype: int = types[randi() % types.size()]
+		var want_weapon: bool = randi() % 2 == 0
+		var etype: int = Item.get_equip_type_for_floor(player.floor_num, want_weapon)
 		result.item_type = etype
 		if Item.EQUIPMENT_DATA.has(etype):
-			result.durability = Item.EQUIPMENT_DATA[etype][3]
+			result.durability = Item.EQUIPMENT_DATA[etype][4]
 			result.max_durability = result.durability
 	elif original.is_scroll():
 		var sidx: int = randi() % 4
@@ -1884,26 +1875,23 @@ func _trigger_spring(pos: Vector2i, cell: int) -> void:
 func _trigger_altar(pos: Vector2i, cell: int) -> void:
 	var item := Item.new()
 	if cell == map.Cell.ALTAR_BIG:
-		# 큰 제단: 더 좋은 아이템 (장비 위주)
-		var types: Array = [
-			Item.Type.WEAPON_IRON, Item.Type.SHIELD_IRON,
-			Item.Type.ARMOR_LEATHER, Item.Type.SCROLL_ENHANCE,
-		]
-		var t: int = types[randi() % types.size()]
+		# 큰 제단: 층수+1 티어 장비 (강화 +1)
+		var want_weapon: bool = randi() % 2 == 0
+		var high_floor: int = min(player.floor_num + 6, 30)
+		var t: int = Item.get_equip_type_for_floor(high_floor, want_weapon)
 		item.item_type = t
 		if Item.EQUIPMENT_DATA.has(t):
-			item.durability = Item.EQUIPMENT_DATA[t][3]
+			item.durability = Item.EQUIPMENT_DATA[t][4]
 			item.max_durability = item.durability
 		item.enhance_level = 1
 	else:
-		# 일반 제단: 장비 or 주문서
+		# 일반 제단: 현재 층수 기준 장비 or 주문서
 		if randi() % 2 == 0:
-			var equips: Array = [Item.Type.WEAPON_STONE, Item.Type.WEAPON_IRON,
-				Item.Type.SHIELD_WOOD, Item.Type.SHIELD_IRON, Item.Type.ARMOR_CLOTH]
-			var t: int = equips[randi() % equips.size()]
+			var want_w: bool = randi() % 2 == 0
+			var t: int = Item.get_equip_type_for_floor(player.floor_num, want_w)
 			item.item_type = t
 			if Item.EQUIPMENT_DATA.has(t):
-				item.durability = Item.EQUIPMENT_DATA[t][3]
+				item.durability = Item.EQUIPMENT_DATA[t][4]
 				item.max_durability = item.durability
 		else:
 			var sidx: int = randi() % 4
@@ -2015,11 +2003,11 @@ func _on_skull_approached(tile_pos: Vector2i) -> void:
 		var item := Item.new()
 		match skull_roll:
 			0:  # 장비
-				var equips: Array = [Item.Type.WEAPON_WOOD, Item.Type.WEAPON_STONE, Item.Type.SHIELD_WOOD, Item.Type.ARMOR_CLOTH]
-				var t: int = equips[randi() % equips.size()]
+				var want_w: bool = randi() % 2 == 0
+				var t: int = Item.get_equip_type_for_floor(player.floor_num, want_w)
 				item.item_type = t
 				if Item.EQUIPMENT_DATA.has(t):
-					item.durability = Item.EQUIPMENT_DATA[t][3]
+					item.durability = Item.EQUIPMENT_DATA[t][4]
 					item.max_durability = item.durability
 			1:  # 재료
 				var mats: Array = [Item.Type.MATERIAL_BRANCH, Item.Type.MATERIAL_STONE, Item.Type.MATERIAL_CLOTH, Item.Type.MATERIAL_ORE]
@@ -2155,8 +2143,8 @@ func _give_class_starting_gear() -> void:
 
 	match player.class_type:
 		Player.ClassType.WARRIOR:
-			_equip_start_weapon(Item.Type.WEAPON_SHORTSWORD)
-			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			_equip_start_weapon(Item.Type.WEAPON_SWORD_1)
+			_equip_start_armor(Item.Type.ARMOR_LIGHT_1)
 			var food_w := Item.new(); food_w.item_type = Item.Type.FOOD
 			player.inventory.append(food_w)
 			for _i in 5:
@@ -2164,8 +2152,8 @@ func _give_class_starting_gear() -> void:
 				if player.inventory.size() < player.MAX_INVENTORY:
 					player.inventory.append(dart)
 		Player.ClassType.MAGE:
-			_equip_start_weapon(Item.Type.WEAPON_STAFF)
-			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			_equip_start_weapon(Item.Type.WEAPON_MARTIAL_1)
+			_equip_start_armor(Item.Type.ARMOR_LIGHT_1)
 			var food_m := Item.new(); food_m.item_type = Item.Type.FOOD
 			player.inventory.append(food_m)
 			for _i in 5:
@@ -2173,8 +2161,8 @@ func _give_class_starting_gear() -> void:
 				if player.inventory.size() < player.MAX_INVENTORY:
 					player.inventory.append(dart)
 		Player.ClassType.ROGUE:
-			_equip_start_weapon(Item.Type.WEAPON_DAGGER)
-			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			_equip_start_weapon(Item.Type.WEAPON_DAGGER_1)
+			_equip_start_armor(Item.Type.ARMOR_LIGHT_1)
 			var food_r := Item.new(); food_r.item_type = Item.Type.FOOD
 			player.inventory.append(food_r)
 			for _i in 5:
@@ -2182,8 +2170,8 @@ func _give_class_starting_gear() -> void:
 				if player.inventory.size() < player.MAX_INVENTORY:
 					player.inventory.append(dart)
 		Player.ClassType.HUNTER:
-			_equip_start_weapon(Item.Type.WEAPON_DAGGER)
-			_equip_start_armor(Item.Type.ARMOR_CLOTH)
+			_equip_start_weapon(Item.Type.WEAPON_BOW_1)
+			_equip_start_armor(Item.Type.ARMOR_LIGHT_1)
 			var food_h := Item.new(); food_h.item_type = Item.Type.FOOD
 			player.inventory.append(food_h)
 			for _i in 5:
@@ -2195,7 +2183,7 @@ func _equip_start_weapon(wtype: int) -> void:
 	var w := Item.new()
 	w.item_type = wtype
 	if Item.EQUIPMENT_DATA.has(wtype):
-		w.durability = Item.EQUIPMENT_DATA[wtype][3]
+		w.durability = Item.EQUIPMENT_DATA[wtype][4]
 		w.max_durability = w.durability
 	player.equip(w)
 
@@ -2203,7 +2191,7 @@ func _equip_start_armor(atype: int) -> void:
 	var a := Item.new()
 	a.item_type = atype
 	if Item.EQUIPMENT_DATA.has(atype):
-		a.durability = Item.EQUIPMENT_DATA[atype][3]
+		a.durability = Item.EQUIPMENT_DATA[atype][4]
 		a.max_durability = a.durability
 	player.equip(a)
 

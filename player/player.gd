@@ -56,6 +56,8 @@ var hunger := 0
 var fatigue := 0
 var floor_num := 1
 var atk := 5
+var atk_min := 5
+var atk_max := 5
 var def_ := 1
 var curse_atk: int = 0
 var curse_def: int = 0
@@ -420,7 +422,8 @@ func _attack_enemy(enemy) -> void:
 		hp = min(hp, max_hp)
 		_exhaustion_loss += 1
 		log_message.emit("탈진 상태! 최대 체력이 줄어들고 있습니다!")
-	var effective_atk: int = atk * next_atk_multiplier
+	var rolled: int = randi_range(atk_min, atk_max) if atk_max > atk_min else atk_max
+	var effective_atk: int = rolled * next_atk_multiplier
 	if next_atk_multiplier > 1:
 		log_message.emit("강타! %d배 데미지!" % next_atk_multiplier)
 		next_atk_multiplier = 1
@@ -438,6 +441,9 @@ func _attack_enemy(enemy) -> void:
 		enemy_killed.emit(kill_tile)
 
 func equip(item) -> void:
+	var str_r: int = item.get_str_req()
+	if str_r > 0 and str_stat < str_r:
+		log_message.emit("힘 부족! (필요 %d / 현재 %d) — 착용은 가능하나 패널티 있음" % [str_r, str_stat])
 	if item.is_weapon():
 		if equipped_weapon:
 			inventory.append(equipped_weapon)
@@ -499,10 +505,15 @@ func unequip_weapon() -> void:
 func _recalc_equip_stats() -> void:
 	var base_atk: int = 5 + (level - 1) + max(0, str_stat - 10) + _save_atk_bonus
 	var base_def: int = 1
-	atk = base_atk + (equipped_weapon.get_equip_atk() if equipped_weapon else 0) - curse_atk
+	var weap_min: int = equipped_weapon.get_equip_atk_min() if equipped_weapon else 0
+	var weap_max: int = equipped_weapon.get_equip_atk() if equipped_weapon else 0
+	atk_min = max(0, base_atk + weap_min - curse_atk)
+	atk_max = max(0, base_atk + weap_max - curse_atk)
 	# 전사 패시브: 근거리 무기 데미지 +15%
-	if class_type == ClassType.WARRIOR and equipped_weapon:
-		atk = int(atk * 1.15)
+	if class_type == ClassType.WARRIOR and equipped_weapon and not equipped_weapon.is_bow():
+		atk_min = int(atk_min * 1.15)
+		atk_max = int(atk_max * 1.15)
+	atk = atk_max
 	var shield_def: int = equipped_shield.get_equip_def() if equipped_shield else 0
 	if shield_def_rune_pct > 0 and equipped_shield:
 		shield_def = int(shield_def * (1.0 + shield_def_rune_pct / 100.0))
@@ -510,9 +521,8 @@ func _recalc_equip_stats() -> void:
 	if equipped_shield and str_stat >= 20:
 		shield_def *= 2
 	var armor_def: int = equipped_armor.get_equip_def() if equipped_armor else 0
-	var is_light_armor: bool = equipped_armor != null and \
-		equipped_armor.item_type == Item.Type.ARMOR_CLOTH
-	if armor_def_rune_pct > 0 and is_light_armor:
+	var light_armor: bool = equipped_armor != null and equipped_armor.is_light_armor()
+	if armor_def_rune_pct > 0 and light_armor:
 		armor_def = int(armor_def * (1.0 + armor_def_rune_pct / 100.0))
 	def_ = max(0, base_def + shield_def + armor_def - curse_def)
 
@@ -547,7 +557,7 @@ func _try_dodge() -> bool:
 	var pct: int
 	if class_type == ClassType.ROGUE:
 		# 도적 패시브: 경갑 착용 시 민첩 수치 = 회피 보너스 %
-		var light_armor := equipped_armor != null and equipped_armor.item_type == Item.Type.ARMOR_CLOTH
+		var light_armor: bool = equipped_armor != null and equipped_armor.is_light_armor()
 		pct = agi_stat if light_armor else max(0, agi_stat - 10)
 	else:
 		pct = max(0, agi_stat - 10)
@@ -633,8 +643,7 @@ func _on_step(consume_hunger: bool = true) -> void:
 	if consume_hunger and fatigue < 450 and mp < max_mp:
 		var mp_regen: int = 1
 		# 마법_친화 룬: 경갑 착용 시 MP 자연회복 2배
-		if mage_mp_regen_rune and equipped_armor != null and \
-				equipped_armor.item_type == Item.Type.ARMOR_CLOTH:
+		if mage_mp_regen_rune and equipped_armor != null and equipped_armor.is_light_armor():
 			mp_regen = 2
 		mp = min(max_mp, mp + mp_regen)
 	if regen_turns > 0:
