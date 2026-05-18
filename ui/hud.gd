@@ -1199,12 +1199,16 @@ func _draw_cauldron_picker() -> void:
 
 func _potion_type_name(potion_type: int) -> String:
 	match potion_type:
-		Item.Type.POTION_HEAL:    return "회복 물약"
-		Item.Type.POTION_HUNGER:  return "포만 물약"
-		Item.Type.POTION_POISON:  return "독 물약"
-		Item.Type.POTION_FIRE:    return "화염 물약"
-		Item.Type.POTION_CLEANSE: return "정화 물약"
-		Item.Type.POTION_SLEEP:   return "수면 물약"
+		Item.Type.POTION_HEAL:     return "회복 물약"
+		Item.Type.POTION_REGEN:    return "재생 물약"
+		Item.Type.POTION_MANA:     return "정신력 물약"
+		Item.Type.POTION_POISON:   return "독 물약"
+		Item.Type.POTION_FIRE:     return "화염 물약"
+		Item.Type.POTION_CLEANSE:  return "정화 물약"
+		Item.Type.POTION_SLEEP:    return "수면 물약"
+		Item.Type.POTION_PARALYZE: return "마비 물약"
+		Item.Type.POTION_ICE:      return "얼음 물약"
+		Item.Type.POTION_EXP:      return "경험치 물약"
 	return "물약"
 
 func _recipe_mat_str(recipe_idx: int, can: bool) -> String:
