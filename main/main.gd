@@ -1983,7 +1983,6 @@ func _on_tablet_approached(tile_pos: Vector2i) -> void:
 # ── 석상 상호작용 ──────────────────────────────────────────────────────────
 
 func _on_statue_approached(tile_pos: Vector2i, statue_type: String) -> void:
-	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
 	match statue_type:
 		"warrior":
 			var warrior_hero_idx: int = -1
@@ -1992,8 +1991,9 @@ func _on_statue_approached(tile_pos: Vector2i, statue_type: String) -> void:
 					warrior_hero_idx = i
 					break
 			if warrior_hero_idx < 0:
-				hud.add_log("전사의 석상: 영웅의 돌이 필요합니다.")
+				hud.add_log("전사의 석상: 영웅의 돌이 필요합니다. 이 층 어딘가에 있을 것 같아요.")
 			else:
+				map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
 				player.inventory.remove_at(warrior_hero_idx)
 				var warrior_eq: Item = player.equipped_weapon
 				if warrior_eq == null:
@@ -2007,9 +2007,10 @@ func _on_statue_approached(tile_pos: Vector2i, statue_type: String) -> void:
 				else:
 					hud.add_log("전사의 석상: 강화할 장착 장비가 없습니다. (영웅의 돌 소모)")
 		"wizard":
-			_on_wizard_statue_approached()
+			_on_wizard_statue_approached(tile_pos)
 			return  # 팝업 선택 이후 do_turns
 		"angel":
+			map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
 			var roll: int = randi() % 6
 			match roll:
 				0:
@@ -2137,17 +2138,18 @@ func _equip_start_armor(atype: int) -> void:
 
 # ── 마법사 석상 ─────────────────────────────────────────────────────────────────
 
-func _on_wizard_statue_approached() -> void:
+func _on_wizard_statue_approached(tile_pos: Vector2i) -> void:
 	var hero_idx: int = -1
 	for i in player.inventory.size():
 		if player.inventory[i].item_type == Item.Type.MATERIAL_HERO_STONE:
 			hero_idx = i
 			break
 	if hero_idx < 0:
-		hud.add_log("마법사의 석상: 영웅의 돌이 필요합니다.")
+		hud.add_log("마법사의 석상: 영웅의 돌이 필요합니다. 이 층 어딘가에 있을 것 같아요.")
 		_refresh_hud()
 		enemy_manager.do_turns(player.tile_pos)
 		return
+	map.set_cell(tile_pos.x, tile_pos.y, map.Cell.FLOOR)
 	player.inventory.remove_at(hero_idx)
 	if player.learned_spells.is_empty():
 		var all_ids: Array = Player.SPELL_DATA.keys()
