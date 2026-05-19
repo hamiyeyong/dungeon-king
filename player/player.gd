@@ -99,6 +99,8 @@ var herb_regen_turns: int = 0
 var bark_shield: int = 0
 var _exhaustion_loss: int = 0  # 탈진으로 줄어든 최대 HP 누적 (피로도 정상화 시 서서히 회복)
 
+var magic_atk: int = 0
+var attacked_enemy_this_turn: bool = false
 var input_blocked := false
 var hud_ref: Node = null
 var enemy_manager_ref = null
@@ -432,6 +434,7 @@ func _attack_enemy(enemy) -> void:
 		log_message.emit("크리티컬!")
 	var dmg: int = enemy.take_damage(effective_atk)
 	log_message.emit("%s에게 %d 피해!" % [enemy.display_name, dmg])
+	attacked_enemy_this_turn = true
 	if enemy.is_dead():
 		var kill_tile: Vector2i = enemy.tile_pos
 		var reward: int = 5 * floor_num
@@ -439,6 +442,18 @@ func _attack_enemy(enemy) -> void:
 		enemy_manager_ref.remove_enemy(enemy)
 		gain_exp(reward)
 		enemy_killed.emit(kill_tile)
+		return
+	# 빠른 무기: 50% 확률 추가 타격
+	if equipped_weapon != null and equipped_weapon.is_fast_weapon() and randi() % 2 == 0:
+		var bonus: int = randi_range(atk_min, atk_max) if atk_max > atk_min else atk_max
+		var bonus_dmg: int = enemy.take_damage(bonus)
+		log_message.emit("연속 공격! %s에게 %d 추가 피해!" % [enemy.display_name, bonus_dmg])
+		if enemy.is_dead():
+			var kill_tile2: Vector2i = enemy.tile_pos
+			log_message.emit("%s 처치! EXP +%d" % [enemy.display_name, 5 * floor_num])
+			enemy_manager_ref.remove_enemy(enemy)
+			gain_exp(5 * floor_num)
+			enemy_killed.emit(kill_tile2)
 
 func equip(item) -> void:
 	var str_r: int = item.get_str_req()
@@ -488,11 +503,11 @@ func sync_throwable_count() -> void:
 	if equipped_throwable == null:
 		throwable_count = 0
 		return
-	var count: int = 0
+	var total: int = 0
 	for it in inventory:
 		if it.item_type == equipped_throwable.item_type:
-			count += 1
-	throwable_count = count
+			total += it.quantity if it.quantity > 0 else 1
+	throwable_count = total
 	if throwable_count == 0:
 		equipped_throwable = null
 
@@ -502,7 +517,12 @@ func use_throwable() -> bool:
 	var t_type: Item.Type = equipped_throwable.item_type
 	for i in inventory.size():
 		if inventory[i].item_type == t_type:
-			inventory.remove_at(i)
+			if inventory[i].quantity > 0:
+				inventory[i].quantity -= 1
+				if inventory[i].quantity <= 0:
+					inventory.remove_at(i)
+			else:
+				inventory.remove_at(i)
 			break
 	sync_throwable_count()
 	stats_changed.emit()
@@ -538,6 +558,7 @@ func _recalc_equip_stats() -> void:
 	if armor_def_rune_pct > 0 and light_armor:
 		armor_def = int(armor_def * (1.0 + armor_def_rune_pct / 100.0))
 	def_ = max(0, base_def + shield_def + armor_def - curse_def)
+	magic_atk = equipped_weapon.get_equip_atk() if equipped_weapon and equipped_weapon.is_staff() else 0
 
 func _on_weapon_used() -> void:
 	if equipped_weapon:

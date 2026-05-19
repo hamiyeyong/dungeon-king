@@ -281,6 +281,12 @@ func _on_player_turn_done() -> void:
 	_try_pickup_floor_items()
 	_process_enemy_statuses()
 	enemy_manager.do_turns(player.tile_pos)
+	# 느린 무기: 적이 추가로 1턴 더 행동 (50% 확률)
+	if player.attacked_enemy_this_turn and player.equipped_weapon != null \
+			and player.equipped_weapon.is_slow_weapon() and randi() % 2 == 0:
+		hud.add_log("느린 무기 — 적이 추가 행동!")
+		enemy_manager.do_turns(player.tile_pos)
+	player.attacked_enemy_this_turn = false
 
 func _process_enemy_statuses() -> void:
 	for r in enemy_manager.tick_statuses():
@@ -1456,6 +1462,7 @@ func _hunter_arrow_drop(tile_pos: Vector2i) -> void:
 	if randi() % 100 < 30:
 		var arrow := Item.new()
 		arrow.item_type = Item.Type.MATERIAL_ARROW_WOOD
+		arrow.quantity = Item.THROWABLE_BUNDLE_SIZES[Item.Type.MATERIAL_ARROW_WOOD]
 		_pick_or_drop(arrow, tile_pos)
 
 func _on_player_enemy_killed(tile_pos: Vector2i) -> void:
@@ -1515,8 +1522,14 @@ func _on_craft_recipe(recipe_idx: int) -> void:
 	result.item_type = recipe[0] as int
 	result.durability = recipe[1] as int
 	result.max_durability = recipe[1] as int
+	if Item.THROWABLE_BUNDLE_SIZES.has(result.item_type):
+		result.quantity = Item.THROWABLE_BUNDLE_SIZES[result.item_type]
 	player.inventory.append(result)
-	hud.add_log("%s 제작 완료!" % Item.get_type_name(recipe[0]))
+	var craft_name: String = Item.get_type_name(recipe[0])
+	if result.quantity > 0:
+		hud.add_log("%s ×%d 제작 완료!" % [craft_name, result.quantity])
+	else:
+		hud.add_log("%s 제작 완료!" % craft_name)
 	_run_explore_xp += 30
 	_refresh_hud()
 
@@ -2277,37 +2290,33 @@ func _give_class_starting_gear() -> void:
 			_equip_start_armor(Item.Type.ARMOR_LIGHT_1)
 			var food_w := Item.new(); food_w.item_type = Item.Type.FOOD
 			player.inventory.append(food_w)
-			for _i in 5:
-				var dart := Item.new(); dart.item_type = Item.Type.MATERIAL_DART
-				if player.inventory.size() < player.MAX_INVENTORY:
-					player.inventory.append(dart)
+			var dart_w := Item.new(); dart_w.item_type = Item.Type.MATERIAL_DART
+			dart_w.quantity = Item.THROWABLE_BUNDLE_SIZES[Item.Type.MATERIAL_DART]
+			player.inventory.append(dart_w)
 		Player.ClassType.MAGE:
 			_equip_start_weapon(Item.Type.WEAPON_MARTIAL_1)
 			_equip_start_armor(Item.Type.ARMOR_LIGHT_1)
 			var food_m := Item.new(); food_m.item_type = Item.Type.FOOD
 			player.inventory.append(food_m)
-			for _i in 5:
-				var dart := Item.new(); dart.item_type = Item.Type.MATERIAL_DART
-				if player.inventory.size() < player.MAX_INVENTORY:
-					player.inventory.append(dart)
+			var dart_m := Item.new(); dart_m.item_type = Item.Type.MATERIAL_DART
+			dart_m.quantity = Item.THROWABLE_BUNDLE_SIZES[Item.Type.MATERIAL_DART]
+			player.inventory.append(dart_m)
 		Player.ClassType.ROGUE:
 			_equip_start_weapon(Item.Type.WEAPON_DAGGER_1)
 			_equip_start_armor(Item.Type.ARMOR_LIGHT_1)
 			var food_r := Item.new(); food_r.item_type = Item.Type.FOOD
 			player.inventory.append(food_r)
-			for _i in 5:
-				var dart := Item.new(); dart.item_type = Item.Type.MATERIAL_DART
-				if player.inventory.size() < player.MAX_INVENTORY:
-					player.inventory.append(dart)
+			var dart_r := Item.new(); dart_r.item_type = Item.Type.MATERIAL_DART
+			dart_r.quantity = Item.THROWABLE_BUNDLE_SIZES[Item.Type.MATERIAL_DART]
+			player.inventory.append(dart_r)
 		Player.ClassType.HUNTER:
 			_equip_start_weapon(Item.Type.WEAPON_BOW_1)
 			_equip_start_armor(Item.Type.ARMOR_LIGHT_1)
 			var food_h := Item.new(); food_h.item_type = Item.Type.FOOD
 			player.inventory.append(food_h)
-			for _i in 5:
-				var arrow := Item.new(); arrow.item_type = Item.Type.MATERIAL_ARROW_WOOD
-				if player.inventory.size() < player.MAX_INVENTORY:
-					player.inventory.append(arrow)
+			var arrow_h := Item.new(); arrow_h.item_type = Item.Type.MATERIAL_ARROW_WOOD
+			arrow_h.quantity = Item.THROWABLE_BUNDLE_SIZES[Item.Type.MATERIAL_ARROW_WOOD]
+			player.inventory.append(arrow_h)
 
 func _equip_start_weapon(wtype: int) -> void:
 	var w := Item.new()
@@ -2461,7 +2470,7 @@ func _cast_magic_missile(target_tile: Vector2i) -> void:
 	if player.hp <= 0:
 		return
 	var lv: int = _spell_level("magic_missile")
-	var dmg: int = (5 + player.int_stat) + (lv - 1) * 3
+	var dmg: int = (5 + player.int_stat) + (lv - 1) * 3 + player.magic_atk
 	var target = enemy_manager.get_enemy_at(target_tile)
 	if target:
 		_spawn_hit(target.position)
@@ -2482,7 +2491,7 @@ func _cast_nature_lightning(target_tile: Vector2i) -> void:
 	if player.hp <= 0:
 		return
 	var lv: int = _spell_level("nature_lightning")
-	var dmg: int = (7 + player.int_stat) + (lv - 1) * 3
+	var dmg: int = (7 + player.int_stat) + (lv - 1) * 3 + player.magic_atk
 	var water_nearby: bool = false
 	for dy in range(-1, 2):
 		for dx in range(-1, 2):
@@ -2628,7 +2637,7 @@ func _class_skill_mage() -> void:
 		var dy: int = abs(e.tile_pos.y - player.tile_pos.y)
 		if dx <= 2 and dy <= 2:
 			_spawn_hit(e.position)
-			var dmg: int = e.take_damage(player.atk)
+			var dmg: int = e.take_damage(player.atk + player.magic_atk)
 			e.apply_status("frozen", FROZEN_TURNS + 1)
 			if e.is_dead():
 				var kill_tile: Vector2i = e.tile_pos
