@@ -246,7 +246,7 @@ static func get_equip_type_for_floor(floor_num: int, want_weapon: bool) -> int:
 
 const THROWABLE_BUNDLE_SIZES := {
 	Type.MATERIAL_DART: 5,
-	Type.MATERIAL_ARROW_WOOD: 10,
+	Type.MATERIAL_ARROW_WOOD: 5,
 }
 
 const DART_DMG := 5
@@ -267,6 +267,7 @@ var enhance_level: int = 0
 var is_blessed: bool = false
 var is_cursed: bool = false
 var freshness_turns: int = 0
+var quantity: int = 0       # 투척 아이템 묶음 수 (0 = 해당 없음)
 
 func is_equipment() -> bool:
 	return item_type >= Type.WEAPON_DAGGER_1 and item_type <= Type.SHIELD_5
@@ -293,6 +294,16 @@ func is_heavy_armor() -> bool:
 
 func is_bow() -> bool:
 	return item_type >= Type.WEAPON_BOW_1 and item_type <= Type.WEAPON_BOW_5
+
+func is_fast_weapon() -> bool:
+	return item_type >= Type.WEAPON_DAGGER_1 and item_type <= Type.WEAPON_DAGGER_5
+
+func is_slow_weapon() -> bool:
+	return (item_type >= Type.WEAPON_TWOHND_1 and item_type <= Type.WEAPON_TWOHND_5) \
+		or item_type == Type.WEAPON_MARTIAL_1
+
+func is_staff() -> bool:
+	return item_type == Type.WEAPON_MARTIAL_1
 
 func is_two_handed() -> bool:
 	return item_type >= Type.WEAPON_TWOHND_1 and item_type <= Type.WEAPON_TWOHND_5
