@@ -404,12 +404,17 @@ func _try_move(dir: Vector2i) -> void:
 		_on_step()
 		turn_done.emit()
 
+func _str_deficit() -> int:
+	if equipped_weapon == null:
+		return 0
+	return max(0, equipped_weapon.get_str_req() - str_stat)
+
 func _attack_grass(pos: Vector2i) -> void:
 	_acting = true
 	_pending_turn_done = true
 	_play_action_anim("attack_" + _last_walk_anim)
 	hit_at.emit(map_ref.tile_to_world(pos))
-	fatigue = min(600, fatigue + 3)
+	fatigue = min(600, fatigue + 3 + _str_deficit())
 	attacked_cell.emit(pos)
 
 func _attack_enemy(enemy) -> void:
@@ -418,7 +423,7 @@ func _attack_enemy(enemy) -> void:
 	_play_action_anim("attack_" + _last_walk_anim)
 	hit_at.emit(enemy.position)
 	_on_weapon_used()
-	fatigue = min(600, fatigue + 3)
+	fatigue = min(600, fatigue + 3 + _str_deficit())
 	if fatigue >= 600:
 		max_hp = max(5, max_hp - 1)
 		hp = min(hp, max_hp)
@@ -654,7 +659,7 @@ func _update_anim(dir: Vector2i) -> void:
 func _on_step(consume_hunger: bool = true) -> void:
 	turn_num += 1
 	if consume_hunger:
-		hunger = min(600, hunger + 1)
+		hunger = min(600, hunger + 1 + _str_deficit())
 		if hunger >= 600:
 			hp = max(0, hp - 1)
 			log_message.emit("굶주림! 체력이 줄어들고 있습니다!")
