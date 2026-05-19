@@ -2151,15 +2151,18 @@ func _on_tablet_approached(tile_pos: Vector2i) -> void:
 	else:
 		var cidx: int = unidentified[randi() % unidentified.size()]
 		_identified[cidx] = true
-		var learned_name: String
+		var before_name: String
+		var after_name: String
 		if cidx < 10:
 			var tmp := Item.new()
 			tmp.item_type = _potion_map[cidx]
 			tmp.color_idx = cidx
-			learned_name = "%s 물약 → %s" % [Item.COLORS[cidx], tmp.get_display_name(true)]
+			before_name = "%s 물약" % Item.COLORS[cidx]
+			after_name = tmp.get_display_name(true)
 		else:
-			learned_name = "낡은 주문서 → %s" % Item.get_type_name(Item.SCROLL_TYPES[cidx - 10])
-		hud.add_log("지식의 석판이 빛났다! [%s] 식별되었습니다." % learned_name)
+			before_name = "낡은 주문서"
+			after_name = Item.get_type_name(Item.SCROLL_TYPES[cidx - 10])
+		hud.add_log("지식의 석판이 빛났다! [%s]의 정체는 [%s]였다." % [before_name, after_name])
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
 
@@ -2261,10 +2264,10 @@ func _on_bookshelf_approached(tile_pos: Vector2i) -> void:
 			var tmp := Item.new()
 			tmp.item_type = _potion_map[cidx]
 			tmp.color_idx = cidx
-			learned_name = "%s 물약 → %s" % [Item.COLORS[cidx], tmp.get_display_name(true)]
+			learned_name = tmp.get_display_name(true)
 		else:
-			learned_name = "낡은 주문서 → %s" % Item.get_type_name(Item.SCROLL_TYPES[cidx - 10])
-		hud.add_log("책장에서 지식을 얻었다! [%s] 식별되었습니다." % learned_name)
+			learned_name = Item.get_type_name(Item.SCROLL_TYPES[cidx - 10])
+		hud.add_log("책장: [%s]를 알게 되었다." % learned_name)
 	_refresh_hud()
 	enemy_manager.do_turns(player.tile_pos)
 
