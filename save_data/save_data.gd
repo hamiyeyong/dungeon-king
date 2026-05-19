@@ -276,9 +276,9 @@ func get_known_rune_ids() -> Array:
 			ids.append(rid)
 			seen[rid] = true
 	ids.sort_custom(func(a: String, b: String) -> bool:
-		var ca: bool = is_rune_crafted(a)
-		var cb: bool = is_rune_crafted(b)
-		if ca != cb: return ca
+		var ga_g: int = 0 if is_rune_equipped(a) else (1 if is_rune_crafted(a) else (2 if can_craft_rune(a) else 3))
+		var gb_g: int = 0 if is_rune_equipped(b) else (1 if is_rune_crafted(b) else (2 if can_craft_rune(b) else 3))
+		if ga_g != gb_g: return ga_g < gb_g
 		var ga: int = (RUNE_DEFS[a] as Array)[1]
 		var gb: int = (RUNE_DEFS[b] as Array)[1]
 		if ga != gb: return ga > gb

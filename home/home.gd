@@ -60,13 +60,13 @@ const TAB_W   := 88.0
 const TAB_GAP := 4.0
 
 # 룬 슬롯 레이아웃
-const SLOT_Y   := 165.0
+const SLOT_Y   := 180.0
 const SLOT_W   := 120.0
 const SLOT_H   := 52.0
 const SLOT_GAP := 6.0
 
 # 룬 목록 레이아웃
-const RUNE_LIST_Y   := 240.0
+const RUNE_LIST_Y   := 265.0
 const RUNE_ROW_H    := 24.0
 const RUNE_ROWS_VIS := 7
 
@@ -409,7 +409,7 @@ func _draw_rune_tab(font: Font) -> void:
 			"보관 상자: %d개" % stored,
 			HORIZONTAL_ALIGNMENT_RIGHT, 200, 10, Color("#aaaaff"))
 
-	draw_string(font, Vector2(0, 162),
+	draw_string(font, Vector2(0, 172),
 		"장착 슬롯 (%d/%d)" % [slot_count, 5],
 		HORIZONTAL_ALIGNMENT_CENTER, W, 10, Color("#aaaaaa"))
 
