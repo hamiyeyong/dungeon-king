@@ -539,11 +539,11 @@ func _draw_rune_tab(font: Font) -> void:
 				"▼", HORIZONTAL_ALIGNMENT_CENTER, dr.size.x, 11, Color(0.7, 0.7, 0.9))
 
 func _draw_shop_tab(font: Font) -> void:
-	draw_string(font, Vector2(8, 150),
+	draw_string(font, Vector2(0, 136),
+		"상점", HORIZONTAL_ALIGNMENT_CENTER, W, 11, Color("#aaaaaa"))
+	draw_string(font, Vector2(8, 152),
 		"고대의 주화: %d개" % SaveData.rune_coins,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#ffcc00"))
-	draw_string(font, Vector2(0, 150),
-		"상점", HORIZONTAL_ALIGNMENT_CENTER, W, 11, Color("#aaaaaa"))
 
 	# 등급 색상: 랜덤은 무지개 대신 흰색
 	const BOX_COLORS: Array = [

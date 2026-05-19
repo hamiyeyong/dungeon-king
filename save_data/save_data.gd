@@ -13,6 +13,7 @@ var rune_crafted: Array = []          # 제작 완료된 룬 id 목록
 var rune_levels: Dictionary = {}      # {rune_id: level}  1 = 제작 직후
 var rune_equipped: Array = []         # [rune_id, ...] 최대 5슬롯, "" = 빈 슬롯
 var pending_chests: Array = []        # [{grade, frags, new}, ...]
+var rand_box_pull_count: int = 0     # 랜덤 상자 일반 뽑기 누적 (10번마다 희귀+ 보장)
 
 const MILESTONE_THRESHOLDS: Array[int]  = [200, 500, 1000, 2000, 3500, 5000]
 const MILESTONE_LABELS: Array[String]   = [
@@ -52,6 +53,8 @@ const SHOP_BOX_COST: Array[int] = [20, 15, 35, 80, 200]
 
 # 랜덤 상자 등급 가중치
 const RANDOM_BOX_WEIGHTS: Array[int] = [55, 30, 12, 3]
+# 천장 보장 시 희귀/에픽/레전드 가중치 (10번 일반 뽑기 후 적용)
+const RANDOM_BOX_PITY_WEIGHTS: Array[int] = [30, 12, 3]
 
 # 룬 강화 기본 비용 (파편, 등급별): base + level/5
 const RUNE_UPGRADE_BASE: Array[int] = [2, 3, 5, 10]
@@ -355,14 +358,30 @@ func buy_and_open_shop_box(box_type: int) -> Dictionary:
 	if rune_coins < cost: return {}
 	var grade: int
 	if box_type == 0:
-		var roll: int = randi() % 100
-		var cumulative: int = 0
-		grade = 0
-		for g in RANDOM_BOX_WEIGHTS.size():
-			cumulative += RANDOM_BOX_WEIGHTS[g]
-			if roll < cumulative:
-				grade = g
-				break
+		if rand_box_pull_count >= 10:
+			# 천장: 희귀 이상 보장
+			var pity_sum: int = 0
+			for w in RANDOM_BOX_PITY_WEIGHTS:
+				pity_sum += w
+			var roll: int = randi() % pity_sum
+			var cumulative: int = 0
+			grade = RUNE_GRADE_RARE
+			for g in RANDOM_BOX_PITY_WEIGHTS.size():
+				cumulative += RANDOM_BOX_PITY_WEIGHTS[g]
+				if roll < cumulative:
+					grade = RUNE_GRADE_RARE + g
+					break
+			rand_box_pull_count = 0
+		else:
+			var roll: int = randi() % 100
+			var cumulative: int = 0
+			grade = 0
+			for g in RANDOM_BOX_WEIGHTS.size():
+				cumulative += RANDOM_BOX_WEIGHTS[g]
+				if roll < cumulative:
+					grade = g
+					break
+			rand_box_pull_count += 1
 	else:
 		grade = box_type - 1
 	rune_coins -= cost
@@ -383,6 +402,7 @@ func _save() -> void:
 	cfg.set_value("runes", "levels", rune_levels)
 	cfg.set_value("runes", "equipped", rune_equipped)
 	cfg.set_value("runes", "pending_chests", pending_chests)
+	cfg.set_value("runes", "rand_box_pull_count", rand_box_pull_count)
 	cfg.save(SAVE_PATH)
 
 func _load() -> void:
@@ -398,6 +418,7 @@ func _load() -> void:
 	rune_levels = cfg.get_value("runes", "levels", {})
 	rune_equipped = cfg.get_value("runes", "equipped", [])
 	pending_chests = cfg.get_value("runes", "pending_chests", [])
+	rand_box_pull_count = cfg.get_value("runes", "rand_box_pull_count", 0)
 	# 마이그레이션: 구버전 pending_chest (단일 딕셔너리) → pending_chests 배열
 	var old: Dictionary = cfg.get_value("runes", "pending_chest", {})
 	if not old.is_empty() and pending_chests.is_empty():
