@@ -145,13 +145,18 @@ const EQUIPMENT_DATA := {
 
 # 제작 레시피: [결과타입, 결과내구도, [[재료타입, 개수], ...]]
 const RECIPES: Array = [
-	# 무기 (티어 1 제작 가능)
+	# 무기 티어 1 (기본 재료)
 	[Type.WEAPON_DAGGER_1,  15, [[Type.MATERIAL_BRANCH, 2]]],
 	[Type.WEAPON_SWORD_1,   15, [[Type.MATERIAL_BRANCH, 1], [Type.MATERIAL_STONE, 1]]],
 	[Type.WEAPON_BLUNT_1,   18, [[Type.MATERIAL_STONE, 2]]],
 	[Type.WEAPON_TWOHND_1,  20, [[Type.MATERIAL_BRANCH, 3]]],
 	[Type.WEAPON_MARTIAL_1, 15, [[Type.MATERIAL_BRANCH, 1]]],
 	[Type.WEAPON_BOW_1,     15, [[Type.MATERIAL_BRANCH, 2], [Type.MATERIAL_CLOTH, 1]]],
+	# 무기 티어 2 (광석 추가 — 장비 분해로 획득)
+	[Type.WEAPON_DAGGER_2,  20, [[Type.MATERIAL_BRANCH, 2], [Type.MATERIAL_ORE, 1]]],
+	[Type.WEAPON_SWORD_2,   20, [[Type.MATERIAL_BRANCH, 1], [Type.MATERIAL_STONE, 1], [Type.MATERIAL_ORE, 1]]],
+	[Type.WEAPON_BLUNT_2,   22, [[Type.MATERIAL_STONE, 2], [Type.MATERIAL_ORE, 1]]],
+	[Type.WEAPON_TWOHND_2,  25, [[Type.MATERIAL_BRANCH, 3], [Type.MATERIAL_ORE, 1]]],
 	# 방어구 (티어 1~2 제작 가능)
 	[Type.ARMOR_LIGHT_1,    15, [[Type.MATERIAL_CLOTH,  2]]],
 	[Type.ARMOR_LIGHT_2,    20, [[Type.MATERIAL_CLOTH,  1], [Type.MATERIAL_STONE, 1]]],
