@@ -205,6 +205,10 @@ func close_inventory() -> void:
 	_bag_visible = false
 	queue_redraw()
 
+func close_action_popup() -> void:
+	_action_popup_visible = false
+	queue_redraw()
+
 func is_any_popup_open() -> bool:
 	return _popup_visible or _bag_visible or _action_popup_visible or \
 		_equip_action_visible or _craft_visible or _cauldron_picker_visible or \
@@ -602,8 +606,7 @@ func _input(event: InputEvent) -> void:
 				_action_popup_visible = false
 				_bag_visible = false
 				queue_redraw()
-				var _is_dart: bool = _cur_item != null and _cur_item.item_type == Item.Type.MATERIAL_DART
-				item_action.emit(_action_item_idx, "use_dart" if _is_dart else "equip_throwable")
+				item_action.emit(_action_item_idx, "equip_throwable")
 			elif _action_discard_rect().has_point(p):
 				_action_popup_visible = false
 				_bag_visible = false
@@ -614,7 +617,6 @@ func _input(event: InputEvent) -> void:
 				queue_redraw()
 		elif _action_use_rect().has_point(p):
 			_action_popup_visible = false
-			_bag_visible = false
 			queue_redraw()
 			item_action.emit(_action_item_idx, "equip" if _is_equip else "use")
 		elif _action_throw_rect().has_point(p):
@@ -1274,8 +1276,7 @@ func _draw_action_popup() -> void:
 	var _is_equip_item: bool = _it != null and _it.is_equipment()
 	var _is_throw_item: bool = _it != null and _it.is_throwable()
 	if _is_throw_item:
-		var _is_dart_item: bool = _it != null and _it.item_type == Item.Type.MATERIAL_DART
-		_draw_action_btn(_action_use_rect(), "사용" if _is_dart_item else "투척 장착", Color(0.18, 0.15, 0.35, 0.95))
+		_draw_action_btn(_action_use_rect(), "투척 장착", Color(0.18, 0.15, 0.35, 0.95))
 		_draw_action_btn(_action_discard_rect(), "버리기", Color(0.36, 0.1, 0.1, 0.95))
 	else:
 		var _use_label := "장착" if _is_equip_item else "먹기 / 사용"
