@@ -970,20 +970,6 @@ func _on_item_action(idx: int, action: String) -> void:
 		_refresh_hud()
 		return
 
-	if action == "use_dart":
-		var dart_item: Item = player.inventory[idx]
-		if player.equipped_throwable == null:
-			player.inventory.remove_at(idx)
-			player.equip_throwable(dart_item)
-		elif player.equipped_throwable.item_type != Item.Type.MATERIAL_DART:
-			hud.add_log("투척 슬롯이 이미 사용 중입니다.")
-			hud.close_inventory()
-			return
-		_throw_from_slot = true
-		_throw_item_idx = -1
-		hud.close_inventory()
-		_enter_throw_mode()
-		return
 
 	var item: Item = player.inventory[idx]
 	if action == "place":
@@ -1138,6 +1124,10 @@ func _on_item_action(idx: int, action: String) -> void:
 					bottle.item_type = Item.Type.MATERIAL_BOTTLE
 					player.inventory.append(bottle)
 					hud.add_log("빈병을 얻었습니다.")
+				player.inventory.remove_at(idx)
+				_refresh_hud()
+				enemy_manager.do_turns(player.tile_pos)
+				return
 			else:
 				hud.add_log(item.apply(player))
 				# 저주 음식: 낮은 확률로 저주 상태이상 (스탯 1 감소)
@@ -1149,6 +1139,10 @@ func _on_item_action(idx: int, action: String) -> void:
 						player.curse_def += 1
 						player._recalc_equip_stats()
 						hud.add_log("저주 음식! DEF -1")
+				player.inventory.remove_at(idx)
+				_refresh_hud()
+				enemy_manager.do_turns(player.tile_pos)
+				return
 		"disassemble":
 			var mat_count: int = randi() % 2 + 1
 			var mat_type: Item.Type
