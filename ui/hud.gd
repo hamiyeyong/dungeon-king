@@ -1276,7 +1276,7 @@ func _draw_action_popup() -> void:
 	var _is_equip_item: bool = _it != null and _it.is_equipment()
 	var _is_throw_item: bool = _it != null and _it.is_throwable()
 	if _is_throw_item:
-		_draw_action_btn(_action_use_rect(), "투척 장착", Color(0.18, 0.15, 0.35, 0.95))
+		_draw_action_btn(_action_use_rect(), "장착", Color(0.18, 0.15, 0.35, 0.95))
 		_draw_action_btn(_action_discard_rect(), "버리기", Color(0.36, 0.1, 0.1, 0.95))
 	else:
 		var _use_label := "장착" if _is_equip_item else "먹기 / 사용"
