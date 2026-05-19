@@ -332,7 +332,7 @@ func is_throwable() -> bool:
 	return item_type in [Type.MATERIAL_DART, Type.MATERIAL_ARROW_WOOD]
 
 func is_food() -> bool:
-	return item_type in [Type.FOOD, Type.COOKED_FOOD, Type.FOOD_ROTTEN, Type.BURNED_FOOD, Type.FROZEN_FOOD, Type.ROASTED_HERB]
+	return item_type in [Type.FOOD, Type.COOKED_FOOD, Type.FOOD_ROTTEN, Type.BURNED_FOOD, Type.FROZEN_FOOD, Type.ROASTED_HERB, Type.MATERIAL_RAW_MEAT]
 
 func is_potion() -> bool:
 	return item_type >= Type.POTION_HEAL and item_type <= Type.POTION_EXP
