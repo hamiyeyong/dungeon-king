@@ -482,16 +482,29 @@ func unequip(slot: String) -> String:
 
 func equip_throwable(item: Item) -> void:
 	equipped_throwable = item
-	throwable_count = Item.THROWABLE_BUNDLE_SIZES.get(item.item_type, 1)
 	stats_changed.emit()
+
+func sync_throwable_count() -> void:
+	if equipped_throwable == null:
+		throwable_count = 0
+		return
+	var count: int = 0
+	for it in inventory:
+		if it.item_type == equipped_throwable.item_type:
+			count += 1
+	throwable_count = count
+	if throwable_count == 0:
+		equipped_throwable = null
 
 func use_throwable() -> bool:
 	if equipped_throwable == null or throwable_count <= 0:
 		return false
-	throwable_count -= 1
-	if throwable_count <= 0:
-		equipped_throwable = null
-		throwable_count = 0
+	var t_type: Item.Type = equipped_throwable.item_type
+	for i in inventory.size():
+		if inventory[i].item_type == t_type:
+			inventory.remove_at(i)
+			break
+	sync_throwable_count()
 	stats_changed.emit()
 	return true
 

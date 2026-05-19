@@ -156,6 +156,8 @@ const RECIPES: Array = [
 	[Type.ARMOR_LIGHT_1,    15, [[Type.MATERIAL_CLOTH,  2]]],
 	[Type.ARMOR_LIGHT_2,    20, [[Type.MATERIAL_CLOTH,  1], [Type.MATERIAL_STONE, 1]]],
 	[Type.SHIELD_1,         12, [[Type.MATERIAL_BRANCH, 2]]],
+	# 투척 아이템
+	[Type.MATERIAL_ARROW_WOOD, 0, [[Type.MATERIAL_BRANCH, 1]]],
 	# 도구
 	[Type.SCROLL_ENHANCE,    0, [[Type.MATERIAL_HERB,   2], [Type.MATERIAL_BRANCH, 1]]],
 	[Type.MATERIAL_TORCH,    0, [[Type.MATERIAL_BRANCH, 1], [Type.MATERIAL_CLOTH, 1]]],
@@ -247,8 +249,8 @@ const THROWABLE_BUNDLE_SIZES := {
 	Type.MATERIAL_ARROW_WOOD: 10,
 }
 
-const DART_DMG := 3
-const ARROW_DMG := 5
+const DART_DMG := 5
+const ARROW_DMG := 8
 
 const POISON_DMG_PER_TURN := 2
 const POISON_TURNS        := 5

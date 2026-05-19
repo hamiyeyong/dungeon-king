@@ -470,6 +470,7 @@ func _on_log_message(msg: String) -> void:
 	hud.add_log(msg)
 
 func _refresh_hud() -> void:
+	player.sync_throwable_count()
 	hud.update_stats(player.hp, player.max_hp, player.mp, player.max_mp,
 		player.hunger, player.fatigue, player.floor_num, player.level, player.atk, player.def_, player.gold, player.turn_num)
 	hud.update_status(player.poison_turns, player.fire_turns, player.sleep_turns,
@@ -963,8 +964,8 @@ func _on_item_action(idx: int, action: String) -> void:
 
 	if action == "equip_throwable":
 		var t_item: Item = player.inventory[idx]
-		player.inventory.remove_at(idx)
 		player.equip_throwable(t_item)
+		player.sync_throwable_count()
 		hud.add_log("%s 투척 슬롯에 장착! (%d발)" % [t_item.get_display_name(true), player.throwable_count])
 		hud.close_inventory()
 		_refresh_hud()
